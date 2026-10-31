@@ -1,5 +1,6 @@
 
 "use client";
+import Brand from "@/components/Brand";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -55,12 +56,12 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#faf5ed] px-5 text-[#502d37]">
       <div className="w-full max-w-md rounded-3xl border border-[#ead9d1] bg-white p-8">
-        <Link href="/" className="font-serif text-3xl italic">
-          reel <span className="text-[#b66c7c]">&</span> rose.
+        <Link href="/" className="font-serif text-2xl italic sm:text-3xl">
+          brain rot <span className="text-[#b66c7c]">&</span> bookmarks.
         </Link>
 
         <p className="mt-8 text-xs uppercase tracking-[0.25em] text-[#a26f79]">
-          your personal film diary
+          your personal story archive
         </p>
 
         <h1 className="mt-3 font-serif text-3xl">
@@ -99,7 +100,11 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full rounded-full bg-[#713746] px-5 py-3 text-white disabled:opacity-50"
           >
-            {busy ? "Please wait..." : signup ? "Create my account ♡" : "Enter my diary ♡"}
+            {busy
+              ? "Please wait..."
+              : signup
+                ? "Create my account ♡"
+                : "Enter my diary ♡"}
           </button>
         </form>
 

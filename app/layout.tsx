@@ -2,10 +2,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import RoseRain from "@/components/RoseRain";
+
 export const metadata: Metadata = {
-  title: "reel & rose. — your personal film diary",
+  title: "Brainrot & Bookmarks — your personal story archive",
   description:
-    "A little corner of the internet for your favourite movies, series, and stories.",
+    "A little corner of the internet for your favourite movies, books, reviews, and stories.",
 };
 
 export default function RootLayout({
@@ -15,7 +17,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <RoseRain />
+        {children}
+      </body>
     </html>
   );
 }

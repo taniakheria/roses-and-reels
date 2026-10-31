@@ -1,652 +1,704 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
-import {
-  Search,
-  Heart,
-  Check,
-  Trash2,
-  LoaderCircle,
-  Sparkles,
-  Star,
-  Save,
-} from "lucide-react";
 
-type Movie = {
-  id: number;
-  media_type: "movie" | "tv";
-  title: string;
-  poster_path: string;
-  overview: string;
-  release_date: string;
-  genre_ids: number[];
-};
+import Link from "next/link";
+import { ArrowUpRight, Heart } from "lucide-react";
 
-type Entry = Movie & {
-  entry_id: string;
-  status: "watchlist" | "watched";
-  rating: number | null;
-  review: string;
-  is_favorite: boolean;
-};
+import Brand from "@/components/Brand";
 
-const supabase = createClient();
-
-const sparklePositions = [
-  { left: "8%", top: "18%" },
-  { left: "20%", top: "70%" },
-  { left: "32%", top: "12%" },
-  { left: "43%", top: "82%" },
-  { left: "55%", top: "20%" },
-  { left: "66%", top: "72%" },
-  { left: "78%", top: "14%" },
-  { left: "90%", top: "40%" },
-  { left: "13%", top: "48%" },
-  { left: "36%", top: "45%" },
-  { left: "72%", top: "48%" },
-  { left: "94%", top: "80%" },
+// Flying popcorn: each kernel launches sideways (--dx), rises to --peak,
+// spins (--rot) and drops back into the bucket.
+const FLYING_KERNELS = [
+  { dx: "-62px", peak: "-78px", rot: "-220deg", delay: "0s" },
+  { dx: "48px", peak: "-92px", rot: "260deg", delay: ".25s" },
+  { dx: "-24px", peak: "-104px", rot: "180deg", delay: ".55s" },
+  { dx: "70px", peak: "-66px", rot: "-240deg", delay: ".8s" },
+  { dx: "10px", peak: "-118px", rot: "300deg", delay: "1.05s" },
 ];
 
-const ratingLabels = [
-  "Didn't love it",
-  "It was okay",
-  "Pretty good",
-  "Loved it",
-  "Absolutely iconic!",
+// Words and symbols that float up out of the book on hover:
+// (gx, gy) is where each one drifts to, gr is how far it spins.
+const BOOK_GLYPHS = [
+  { text: "✦", x: 112, gx: "-38px", gy: "-62px", gr: "-25deg", delay: "0s", color: "#d4a85a", size: 16 },
+  { text: "♡", x: 148, gx: "34px", gy: "-70px", gr: "18deg", delay: ".4s", color: "#b66c7c", size: 16 },
+  { text: "fr", x: 126, gx: "-14px", gy: "-78px", gr: "-10deg", delay: ".8s", color: "#65705c", size: 15 },
+  { text: "omg", x: 138, gx: "46px", gy: "-52px", gr: "14deg", delay: "1.2s", color: "#b66c7c", size: 14 },
+  { text: "?!", x: 120, gx: "-52px", gy: "-46px", gr: "-18deg", delay: "1.6s", color: "#d4a85a", size: 15 },
 ];
 
 export default function Home() {
-  const [userId, setUserId] = useState("");
-  const [movies, setMovies] = useState<Entry[]>([]);
-  const [results, setResults] = useState<Movie[]>([]);
-  const [query, setQuery] = useState("");
-  const [tab, setTab] = useState("watchlist");
-  const [busy, setBusy] = useState(false);
-  const [statusBusyId, setStatusBusyId] = useState("");
-  const [ratingBusyId, setRatingBusyId] = useState("");
-  const [favoriteBusyId, setFavoriteBusyId] = useState("");
-  const [reviewBusyId, setReviewBusyId] = useState("");
-  const [reviewDrafts, setReviewDrafts] = useState<Record<string, string>>({});
-  const [savedReviews, setSavedReviews] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-  const [toast, setToast] = useState("");
-  const [celebrating, setCelebrating] = useState(false);
-  const [ratingPop, setRatingPop] = useState("");
-  const [favoritePop, setFavoritePop] = useState("");
-
-  function showToast(text: string) {
-    setToast(text);
-    window.setTimeout(() => setToast(""), 3000);
-  }
-
-  async function loadMovies() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    setUserId(user?.id ?? "");
-
-    if (!user) {
-      setMovies([]);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("movie_entries")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    setMovies(
-      (data ?? []).map((row) => ({
-        id: row.tmdb_id,
-        entry_id: row.id,
-        media_type: row.media_type,
-        title: row.title,
-        poster_path: row.poster_path ?? "",
-        overview: row.overview ?? "",
-        release_date: row.release_date ?? "",
-        genre_ids: row.genre_ids ?? [],
-        status: row.status,
-        rating: row.rating,
-        review: row.review ?? "",
-        is_favorite: row.is_favorite ?? false,
-      }))
-    );
-  }
-
-  useEffect(() => {
-    loadMovies();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      loadMovies();
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function searchMovies(e: React.FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setBusy(true);
-    setMessage("");
-    setResults([]);
-
-    try {
-      const response = await fetch(
-        `/api/tmdb?q=${encodeURIComponent(query.trim())}`
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Search failed.");
-      }
-
-      setResults(data.results ?? []);
-
-      if (!data.results?.length) {
-        setMessage("No results found. Try another title.");
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Search failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addMovie(movie: Movie) {
-    if (!userId) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const { error } = await supabase.from("movie_entries").insert({
-      user_id: userId,
-      tmdb_id: movie.id,
-      media_type: movie.media_type,
-      title: movie.title,
-      poster_path: movie.poster_path,
-      overview: movie.overview,
-      release_date: movie.release_date,
-      genre_ids: movie.genre_ids,
-      status: "watchlist",
-    });
-
-    if (error?.code === "23505") {
-      showToast("Already in your diary ♡");
-      return;
-    }
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    await loadMovies();
-    showToast(`${movie.title} added to your diary ♡`);
-    setCelebrating(true);
-    window.setTimeout(() => setCelebrating(false), 3000);
-  }
-
-  async function updateStatus(movie: Entry) {
-    if (statusBusyId) return;
-
-    setStatusBusyId(movie.entry_id);
-    const next = movie.status === "watched" ? "watchlist" : "watched";
-
-    const { error } = await supabase
-      .from("movie_entries")
-      .update({
-        status: next,
-        watched_on:
-          next === "watched" ? new Date().toISOString().slice(0, 10) : null,
-      })
-      .eq("id", movie.entry_id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      await loadMovies();
-      showToast(
-        next === "watched"
-          ? `${movie.title} — watched! ♡`
-          : `${movie.title} moved to your watchlist`
-      );
-    }
-
-    setStatusBusyId("");
-  }
-
-  async function rateMovie(movie: Entry, rating: number) {
-    if (ratingBusyId) return;
-
-    setRatingBusyId(movie.entry_id);
-    setRatingPop(movie.entry_id);
-
-    const { error } = await supabase
-      .from("movie_entries")
-      .update({ rating })
-      .eq("id", movie.entry_id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMovies((previous) =>
-        previous.map((item) =>
-          item.entry_id === movie.entry_id ? { ...item, rating } : item
-        )
-      );
-      showToast(`${rating}/5 — ${ratingLabels[rating - 1]} ✨`);
-    }
-
-    window.setTimeout(() => setRatingPop(""), 450);
-    setRatingBusyId("");
-  }
-
-  async function toggleFavorite(movie: Entry) {
-    if (favoriteBusyId) return;
-
-    setFavoriteBusyId(movie.entry_id);
-    const next = !movie.is_favorite;
-    setFavoritePop(movie.entry_id);
-
-    const { error } = await supabase
-      .from("movie_entries")
-      .update({ is_favorite: next })
-      .eq("id", movie.entry_id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMovies((previous) =>
-        previous.map((item) =>
-          item.entry_id === movie.entry_id
-            ? { ...item, is_favorite: next }
-            : item
-        )
-      );
-      showToast(
-        next ? `Added to your favourites ♡` : `Removed from favourites`
-      );
-    }
-
-    window.setTimeout(() => setFavoritePop(""), 450);
-    setFavoriteBusyId("");
-  }
-
-  async function saveReview(movie: Entry) {
-    const review = reviewDrafts[movie.entry_id] ?? movie.review;
-
-    if (reviewBusyId) return;
-    if (review === movie.review) {
-      showToast("Your review is already saved ♡");
-      return;
-    }
-
-    setReviewBusyId(movie.entry_id);
-
-    const { error } = await supabase
-      .from("movie_entries")
-      .update({ review })
-      .eq("id", movie.entry_id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setMovies((previous) =>
-        previous.map((item) =>
-          item.entry_id === movie.entry_id ? { ...item, review } : item
-        )
-      );
-      setReviewDrafts((previous) => {
-        const next = { ...previous };
-        delete next[movie.entry_id];
-        return next;
-      });
-      setSavedReviews((previous) => [...previous, movie.entry_id]);
-      showToast("Your little review is saved ♡");
-
-      window.setTimeout(() => {
-        setSavedReviews((previous) =>
-          previous.filter((id) => id !== movie.entry_id)
-        );
-      }, 2500);
-    }
-
-    setReviewBusyId("");
-  }
-
-  async function deleteMovie(movie: Entry) {
-    if (!window.confirm(`Remove ${movie.title} from your diary?`)) return;
-
-    const { error } = await supabase
-      .from("movie_entries")
-      .delete()
-      .eq("id", movie.entry_id);
-
-    if (error) {
-      setMessage(error.message);
-    } else {
-      await loadMovies();
-      showToast(`${movie.title} removed from your diary`);
-    }
-  }
-
-  const visible = movies.filter(
-    (movie) =>
-      tab === "all" ||
-      (tab === "favourites"
-        ? movie.is_favorite
-        : movie.status === tab)
-  );
-
   return (
-    <main className="min-h-screen overflow-x-clip bg-[#faf5ed] px-4 pb-8 pt-5 text-[#633747] sm:px-6 sm:pt-7 md:px-10">
+    <main className="min-h-screen w-full overflow-x-hidden bg-[#faf5ed] px-5 pb-8 pt-6 text-[#633747] sm:px-8 sm:pt-10">
       <style jsx global>{`
-        @keyframes sparkle-pop {
-          0% { opacity: 0; transform: scale(0) rotate(-30deg) translateY(15px); }
-          20% { opacity: 1; transform: scale(1.4) rotate(15deg); }
-          65% { opacity: 1; transform: scale(1) translateY(-12px); }
-          100% { opacity: 0; transform: scale(.3) rotate(35deg) translateY(-35px); }
+        /* ---------- POPCORN ---------- */
+
+        /* Resting state: kernels breathe gently */
+        @keyframes kernel-bob {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-2.5px) rotate(1.5deg); }
         }
-        @keyframes toast-appear {
-          0% { opacity: 0; transform: translate(-50%, 18px) scale(.9); }
-          12%, 80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-          100% { opacity: 0; transform: translate(-50%, -8px) scale(.98); }
+
+        /* Every few seconds one kernel pops up on its own */
+        @keyframes kernel-idle-pop {
+          0%, 58%, 100% { transform: translateY(0) rotate(0deg); }
+          65% { transform: translateY(-24px) rotate(-14deg); }
+          71% { transform: translateY(-4px) rotate(8deg); }
+          76% { transform: translateY(-9px) rotate(-4deg); }
+          83% { transform: translateY(0) rotate(0deg); }
         }
-        @keyframes heart-pop {
-          0% { transform: scale(1); }
-          40% { transform: scale(1.65) rotate(-12deg); }
-          70% { transform: scale(.85) rotate(8deg); }
-          100% { transform: scale(1); }
+
+        /* Hover: kernels jump like the machine is going */
+        @keyframes kernel-pop {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          40% { transform: translateY(-17px) rotate(-12deg); }
+          70% { transform: translateY(-5px) rotate(9deg); }
         }
-        @keyframes star-pop {
-          0% { transform: scale(.6) rotate(-25deg); }
-          60% { transform: scale(1.5) rotate(12deg); }
-          100% { transform: scale(1) rotate(0); }
+
+        @keyframes bucket-wiggle {
+          0%, 100% { transform: rotate(0deg); }
+          30% { transform: rotate(-3deg); }
+          70% { transform: rotate(3deg); }
         }
-        .sparkle {
-          position: fixed;
-          z-index: 100;
-          pointer-events: none;
-          color: #b66c7c;
-          font-size: clamp(20px, 3vw, 38px);
-          animation: sparkle-pop 1.5s ease-out forwards;
-          text-shadow: 0 2px 12px #e7b5c4;
+
+        /* Hover: extra kernels fly out and fall back in */
+        @keyframes kernel-fly {
+          0% {
+            opacity: 0;
+            transform: translate(0, 0) scale(.4) rotate(0deg);
+            animation-timing-function: cubic-bezier(.2, .8, .4, 1);
+          }
+          12% { opacity: 1; }
+          45% {
+            opacity: 1;
+            transform: translate(calc(var(--dx) * .6), var(--peak)) scale(1)
+              rotate(calc(var(--rot) * .5));
+            animation-timing-function: cubic-bezier(.5, 0, .9, .6);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--dx), 42px) scale(.9) rotate(var(--rot));
+          }
         }
-        .success-toast {
-          position: fixed;
-          z-index: 110;
-          bottom: calc(20px + env(safe-area-inset-bottom));
-          left: 50%;
-          animation: toast-appear 3s ease-in-out forwards;
-          pointer-events: none;
+
+        @keyframes pop-text {
+          0% { opacity: 0; transform: translateY(8px) rotate(-8deg) scale(.6); }
+          15% { opacity: 1; transform: translateY(0) rotate(-8deg) scale(1.1); }
+          60% { opacity: 1; transform: translateY(-4px) rotate(-8deg) scale(1); }
+          100% { opacity: 0; transform: translateY(-14px) rotate(-8deg) scale(1); }
         }
-        .heart-pop { animation: heart-pop .45s ease-out; }
-        .star-pop { animation: star-pop .35s ease-out; }
+
+        @keyframes sparkle-twinkle {
+          0%, 100% { opacity: .45; transform: scale(.8); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .pop-kernel,
+        .fly-kernel,
+        .pop-text,
+        .corn-sparkle,
+        .pop-bucket {
+          transform-box: fill-box;
+          transform-origin: center;
+        }
+
+        .pop-kernel {
+          animation: kernel-bob 3.2s ease-in-out infinite;
+        }
+
+        .pop-kernel:nth-child(2) {
+          animation: kernel-idle-pop 7s ease-in-out 1.5s infinite;
+        }
+
+        .pop-kernel:nth-child(3) { animation-delay: -.8s; }
+        .pop-kernel:nth-child(4) { animation-delay: -1.6s; }
+        .pop-kernel:nth-child(5) { animation-delay: -2.4s; }
+
+        .pop-bucket {
+          transform-origin: 50% 100%;
+        }
+
+        .fly-kernel,
+        .pop-text {
+          opacity: 0;
+        }
+
+        .corn-sparkle {
+          animation: sparkle-twinkle 2.6s ease-in-out infinite;
+        }
+
+        .corn-sparkle:nth-child(2) { animation-delay: .8s; }
+        .corn-sparkle:nth-child(3) { animation-delay: 1.5s; }
+
+        /* Hover, keyboard focus and touch-press all trigger the show */
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-kernel {
+          animation: kernel-pop .75s ease-in-out infinite;
+        }
+
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-kernel:nth-child(2) { animation-delay: .12s; }
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-kernel:nth-child(3) { animation-delay: .24s; }
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-kernel:nth-child(4) { animation-delay: .08s; }
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-kernel:nth-child(5) { animation-delay: .3s; }
+
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-bucket {
+          animation: bucket-wiggle .7s ease-in-out infinite;
+        }
+
+        .cinema-link:is(:hover, :focus-visible, :active) .fly-kernel {
+          animation: kernel-fly 1.4s linear infinite;
+          animation-delay: var(--delay);
+        }
+
+        .cinema-link:is(:hover, :focus-visible, :active) .pop-text {
+          animation: pop-text 1.4s ease-out infinite;
+        }
+
+        /* ---------- OPEN BOOK ---------- */
+
+        /* Resting state: the book floats, its shadow breathes */
+        @keyframes book-float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+
+        @keyframes shadow-breathe {
+          0%, 100% { transform: scaleX(1); opacity: .2; }
+          50% { transform: scaleX(.9); opacity: .12; }
+        }
+
+        @keyframes bookmark-idle {
+          from { transform: rotate(-2.5deg); }
+          to { transform: rotate(2.5deg); }
+        }
+
+        /* Hover: the bookmark swings properly */
+        @keyframes bookmark-wave {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(9deg); }
+        }
+
+        @keyframes book-sparkle {
+          0%, 100% { opacity: .45; transform: scale(.8); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        @keyframes flower-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Resting state: once in a while, one page quietly turns */
+        @keyframes page-flip-idle {
+          0%, 84% { opacity: 0; transform: scaleX(1) skewY(0deg); }
+          85% { opacity: 1; transform: scaleX(1) skewY(0deg); }
+          92% { opacity: 1; transform: scaleX(0) skewY(-7deg); }
+          98% { opacity: 1; transform: scaleX(-1) skewY(0deg); }
+          100% { opacity: 0; transform: scaleX(-1) skewY(0deg); }
+        }
+
+        /* Hover: pages flip through the book in a rapid ripple */
+        @keyframes page-flip {
+          0% { opacity: 1; transform: scaleX(1) skewY(0deg); }
+          50% { opacity: 1; transform: scaleX(0) skewY(-9deg); }
+          92% { opacity: 1; transform: scaleX(-1) skewY(0deg); }
+          100% { opacity: 0; transform: scaleX(-1) skewY(0deg); }
+        }
+
+        /* Hover: words and symbols escape the story */
+        @keyframes glyph-rise {
+          0% { opacity: 0; transform: translate(0, 0) scale(.5) rotate(0deg); }
+          18% { opacity: 1; }
+          100% {
+            opacity: 0;
+            transform: translate(var(--gx), var(--gy)) scale(1.15) rotate(var(--gr));
+          }
+        }
+
+        .book-hover,
+        .book-float,
+        .book-shadow,
+        .book-bookmark,
+        .book-flower,
+        .book-sparkle,
+        .flip-page,
+        .rise-glyph {
+          transform-box: fill-box;
+        }
+
+        .book-hover {
+          transform-origin: 50% 90%;
+          transition: transform .5s cubic-bezier(.3, 1.5, .5, 1);
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .book-hover {
+          transform: rotate(-2.5deg) scale(1.04);
+        }
+
+        .book-float {
+          animation: book-float 5s ease-in-out infinite;
+        }
+
+        .book-shadow {
+          transform-origin: center;
+          animation: shadow-breathe 5s ease-in-out infinite;
+        }
+
+        .book-glow {
+          opacity: 0;
+          transition: opacity .6s ease;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .book-glow {
+          opacity: 1;
+        }
+
+        .book-bookmark {
+          transform-origin: top center;
+          animation: bookmark-idle 3.4s ease-in-out infinite alternate;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .book-bookmark {
+          animation: bookmark-wave .65s ease-in-out infinite;
+        }
+
+        .book-flower {
+          transform-origin: center;
+          animation: flower-spin 14s linear infinite;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .book-flower {
+          animation-duration: 2.5s;
+        }
+
+        .book-sparkle {
+          transform-origin: center;
+          animation: book-sparkle 2.8s ease-in-out infinite;
+        }
+
+        .book-sparkle:nth-child(2) { animation-delay: .9s; }
+        .book-sparkle:nth-child(3) { animation-delay: 1.6s; }
+
+        .flip-page {
+          transform-origin: 0% 50%;
+          opacity: 0;
+        }
+
+        .flip-page-1 {
+          animation: page-flip-idle 9s ease-in-out 2s infinite;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .flip-page {
+          animation: page-flip 1.1s ease-in-out infinite;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .flip-page-2 { animation-delay: .36s; }
+        .library-link:is(:hover, :focus-visible, :active) .flip-page-3 { animation-delay: .72s; }
+
+        .rise-glyph {
+          transform-origin: center;
+          opacity: 0;
+        }
+
+        .library-link:is(:hover, :focus-visible, :active) .rise-glyph {
+          animation: glyph-rise 2s ease-out infinite;
+          animation-delay: var(--gd);
+        }
+
         @media (prefers-reduced-motion: reduce) {
-          .sparkle, .success-toast, .heart-pop, .star-pop {
-            animation-duration: .01ms;
+          .pop-kernel,
+          .fly-kernel,
+          .pop-text,
+          .corn-sparkle,
+          .pop-bucket,
+          .book-float,
+          .book-shadow,
+          .book-bookmark,
+          .book-flower,
+          .book-sparkle,
+          .flip-page,
+          .rise-glyph {
+            animation: none !important;
+          }
+
+          .book-hover,
+          .book-glow {
+            transition: none;
+          }
+
+          .library-link:is(:hover, :focus-visible, :active) .book-hover {
+            transform: none;
           }
         }
       `}</style>
 
-      {celebrating && (
-        <div aria-hidden="true">
-          {sparklePositions.map((position, index) => (
-            <span key={index} className="sparkle" style={position}>
-              {index % 3 === 0 ? "★" : index % 3 === 1 ? "✧" : "✦"}
-            </span>
-          ))}
+      {/* HEADER */}
+      <header className="relative mx-auto flex w-full max-w-5xl items-center justify-end gap-3 py-2">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <Brand />
         </div>
-      )}
 
-      {toast && (
-        <div key={toast} role="status" className="success-toast rounded-full border border-[#e7c5cb] bg-white px-6 py-3 text-sm text-[#713746] shadow-xl">
-          ✨ {toast}
-        </div>
-      )}
-
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-        <a href="/" className="whitespace-nowrap font-serif text-2xl italic sm:text-3xl">
-          reel <span className="text-[#b66c7c]">&</span> rose.
-        </a>
-        <a href="/login" className="min-h-11 shrink-0 rounded-full bg-[#713746] px-4 py-2 text-sm text-white sm:px-5 sm:text-base">
-          {userId ? "Account ♡" : "Sign in ♡"}
-        </a>
+        <Link
+          href="/login"
+          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#713746] px-4 py-2 text-xs text-white transition hover:bg-[#8b4a5d] active:scale-95 sm:px-5 sm:text-sm"
+        >
+          Account ♡
+        </Link>
       </header>
 
-      <section className="mx-auto max-w-6xl py-9 sm:py-12 md:py-14">
-        <p className="mb-3 text-[10px] uppercase tracking-[0.22em] text-[#a26f79] sm:mb-4 sm:text-xs sm:tracking-[0.3em]">
-          your personal film diary
+
+      {/* HERO */}
+      <section className="mx-auto flex w-full max-w-5xl flex-col items-center pb-8 pt-16 text-center sm:pb-14 sm:pt-24">
+        <p className="mb-4 text-[9px] uppercase tracking-[0.28em] text-[#a26f79] sm:text-xs sm:tracking-[0.3em]">
+          A little corner of your world
         </p>
-        <h1 className="max-w-full font-serif text-[clamp(2.55rem,9vw,3.25rem)] leading-[1.04] sm:text-5xl md:text-7xl">
-          Every story leaves
-          <br /> a little <i className="text-[#b66c7c]">something.</i>
+
+        <h1 className="font-serif text-[2.65rem] italic leading-[1.15] tracking-tight sm:text-6xl md:text-7xl">
+          Stories we watch.
+          <br />
+          <span className="text-[#b66c7c]">Stories we read.</span>
         </h1>
-        <p className="mt-4 max-w-lg text-sm leading-6 text-[#876d70] sm:mt-5 sm:text-base sm:leading-7">
-          A little corner of the internet for your favourite movies, series,
-          and stories you want to remember.
+
+        <p className="mt-5 max-w-[310px] text-[13px] leading-6 text-[#987c7c] sm:max-w-md sm:text-base sm:leading-7">
+          A personal collection of films, books, little thoughts
+          and stories worth remembering.
         </p>
 
-        <form onSubmit={searchMovies} className="mt-6 flex min-h-14 w-full max-w-2xl items-center gap-1.5 rounded-2xl border border-[#e7d4cf] bg-white p-1.5 sm:mt-8 sm:gap-2 sm:p-2">
-          <Search className="ml-2 shrink-0 text-[#b66c7c]" size={20} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search movies or TV shows..." className="min-w-0 flex-1 bg-transparent px-1.5 text-base outline-none placeholder:text-[#b49a9c] sm:px-2" />
-          <button disabled={busy} className="min-h-10 shrink-0 rounded-xl bg-[#713746] px-3.5 py-2 text-sm text-white disabled:opacity-50 sm:px-5 sm:text-base">
-            {busy ? "Searching..." : "Search"}
-          </button>
-        </form>
-
-        {message && <p role="status" className="mt-4 text-sm">{message}</p>}
-
-        {results.length > 0 && (
-          <section className="mt-7 sm:mt-8">
-            <h2 className="mb-4 font-serif text-2xl">Found for you ♡</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-5">
-              {results.map((movie) => (
-                <article key={`${movie.media_type}-${movie.id}`}>
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-[#ead9d1]">
-                    {movie.poster_path ? (
-                      <Image fill unoptimized src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} alt={`${movie.title} poster`} className="object-cover" />
-                    ) : <div className="p-4">Poster unavailable</div>}
-                  </div>
-                  <h3 className="mt-2 break-words font-serif text-base leading-snug sm:text-lg">{movie.title}</h3>
-                  <p className="text-xs text-[#987c7c]">
-                    {movie.release_date?.slice(0, 4)} · {movie.media_type === "tv" ? "Series" : "Film"}
-                  </p>
-                  <p className="mt-1 line-clamp-3 text-xs leading-5">{movie.overview}</p>
-                  <button onClick={() => addMovie(movie)} className="mt-3 min-h-11 w-full rounded-full border border-[#d9b9b6] px-2 py-2 text-xs transition hover:bg-[#f0dfd7] active:scale-95 sm:text-sm">
-                    + Add to watchlist
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="mt-10 sm:mt-14">
-          <h2 className="font-serif text-2xl sm:text-3xl">Your little collection</h2>
-          <div className="no-scrollbar my-4 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:my-5 sm:flex-wrap sm:overflow-visible sm:px-0">
-            {[
-              ["watchlist", "Watchlist"],
-              ["watched", "Watched"],
-              ["favourites", "Favourites ♡"],
-              ["all", "Everything"],
-            ].map(([value, label]) => (
-              <button key={value} onClick={() => setTab(value)} className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm sm:px-5 ${tab === value ? "border-[#713746] bg-[#713746] text-white" : "border-[#e7d4cf] bg-white"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {!userId ? (
-            <div className="rounded-3xl border border-dashed border-[#d9b9b6] bg-white/60 p-7 text-center sm:p-12">
-              <Heart className="mx-auto mb-4 text-[#b66c7c]" size={30} />
-              <h3 className="font-serif text-2xl">Your stories belong here.</h3>
-              <p className="mt-2 text-sm">Sign in to save your personal collection.</p>
-            </div>
-          ) : visible.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-[#d9b9b6] bg-white/60 p-7 text-center sm:p-12">
-              <p className="text-4xl">🎬 🌷</p>
-              <h3 className="mt-4 font-serif text-2xl">A blank page, for now.</h3>
-              <p className="mt-2 text-sm">Search for a title above and add it to your diary.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 lg:grid-cols-5">
-              {visible.map((movie) => {
-                const isSavingStatus = statusBusyId === movie.entry_id;
-                const isSavingRating = ratingBusyId === movie.entry_id;
-                const isSavingFavorite = favoriteBusyId === movie.entry_id;
-                const isSavingReview = reviewBusyId === movie.entry_id;
-                const draft = reviewDrafts[movie.entry_id] ?? movie.review;
-                const reviewChanged = draft !== movie.review;
-
-                return (
-                  <article key={movie.entry_id} className="min-w-0 rounded-2xl border border-[#ead9d1] bg-white p-1.5 sm:p-2">
-                    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-[#ead9d1]">
-                      {movie.poster_path ? (
-                        <Image fill unoptimized src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`} alt={movie.title} className="object-cover" />
-                      ) : <div className="p-4">Poster unavailable</div>}
-                    </div>
-
-                    <div className="mt-3 flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="break-words font-serif text-base leading-snug sm:text-lg">{movie.title}</h3>
-                        <p className="text-xs text-[#987c7c]">
-                          {movie.release_date?.slice(0, 4)} · {movie.media_type === "tv" ? "Series" : "Film"}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => toggleFavorite(movie)}
-                        disabled={Boolean(favoriteBusyId)}
-                        title={movie.is_favorite ? "Remove from favourites" : "Add to favourites"}
-                        aria-label={movie.is_favorite ? "Remove from favourites" : "Add to favourites"}
-                        className={`shrink-0 rounded-full p-2 transition-all duration-200 hover:scale-110 active:scale-90 disabled:opacity-50 ${movie.is_favorite ? "bg-[#fbe8ed] text-[#c04d70]" : "bg-[#faf5ed] text-[#bda1a4] hover:text-[#c04d70]"} ${favoritePop === movie.entry_id ? "heart-pop" : ""}`}
-                      >
-                        <Heart size={19} fill={movie.is_favorite ? "currentColor" : "none"} />
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={() => updateStatus(movie)}
-                      disabled={Boolean(statusBusyId)}
-                      className={`mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border px-2 py-2 text-xs font-medium transition-all duration-200 disabled:opacity-60 sm:gap-2 sm:px-3 sm:text-sm ${
-                        movie.status === "watched"
-                          ? "border-[#b66c7c] bg-[#f8e8ec] text-[#713746] hover:bg-[#f1d9df]"
-                          : "border-[#713746] bg-[#713746] text-white hover:bg-[#8b4a5d] active:scale-95"
-                      }`}
-                    >
-                      {isSavingStatus ? (
-                        <><LoaderCircle size={16} className="animate-spin" /> Saving...</>
-                      ) : movie.status === "watched" ? (
-                        <><Check size={16} /> Watched it ♡</>
-                      ) : (
-                        <><Heart size={16} /> I watched this</>
-                      )}
-                    </button>
-
-                    {movie.status === "watched" && (
-                      <div className="mt-3 rounded-xl bg-[#faf5ed] p-2.5 sm:mt-4 sm:p-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-[#987c7c]">
-                          Your rating
-                        </p>
-
-                        <div className="mt-2 flex items-center justify-between gap-0.5">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <button
-                              key={star}
-                              onClick={() => rateMovie(movie, star)}
-                              disabled={Boolean(ratingBusyId)}
-                              aria-label={`Rate ${star} out of 5 stars`}
-                              className={`transition duration-150 hover:scale-125 active:scale-90 disabled:opacity-50 ${ratingPop === movie.entry_id ? "star-pop" : ""} ${star <= (movie.rating ?? 0) ? "text-[#d6a344]" : "text-[#ddc9bc]"}`}
-                            >
-                              <Star size={19} fill={star <= (movie.rating ?? 0) ? "currentColor" : "none"} className="sm:h-[22px] sm:w-[22px]" />
-                            </button>
-                          ))}
-
-                          {isSavingRating && <LoaderCircle size={14} className="ml-1 animate-spin" />}
-                        </div>
-
-                        <p className="mt-2 min-h-5 text-xs text-[#89515f]">
-                          {movie.rating
-                            ? `${movie.rating}/5 — ${ratingLabels[movie.rating - 1]}`
-                            : "Tap a star to rate this title"}
-                        </p>
-
-                        <div className="mt-4 border-t border-[#ead9d1] pt-3">
-                          <label htmlFor={`review-${movie.entry_id}`} className="flex items-center gap-2 font-serif text-base">
-                            <Sparkles size={15} className="text-[#b66c7c]" />
-                            Your little review
-                          </label>
-
-                          <textarea
-                            id={`review-${movie.entry_id}`}
-                            value={draft}
-                            onChange={(e) => {
-                              setReviewDrafts((previous) => ({
-                                ...previous,
-                                [movie.entry_id]: e.target.value,
-                              }));
-                              setSavedReviews((previous) =>
-                                previous.filter((id) => id !== movie.entry_id)
-                              );
-                            }}
-                            placeholder="How did it make you feel? Write your little thoughts..."
-                            rows={4}
-                            className="mt-2 w-full resize-y rounded-xl border border-[#ead9d1] bg-white p-3 text-sm leading-6 outline-none transition focus:border-[#b66c7c] focus:ring-2 focus:ring-[#eacbd3]"
-                          />
-
-                          <button
-                            onClick={() => saveReview(movie)}
-                            disabled={isSavingReview || !reviewChanged}
-                            className={`mt-2 flex w-full items-center justify-center gap-2 rounded-full px-3 py-2 text-sm transition-all duration-200 disabled:cursor-default ${
-                              savedReviews.includes(movie.entry_id)
-                                ? "bg-[#e5efe2] text-[#52704d]"
-                                : reviewChanged
-                                  ? "bg-[#713746] text-white hover:bg-[#8b4a5d] active:scale-95"
-                                  : "border border-[#e7d4cf] bg-white text-[#987c7c]"
-                            }`}
-                          >
-                            {isSavingReview ? (
-                              <><LoaderCircle size={15} className="animate-spin" /> Saving your thoughts...</>
-                            ) : savedReviews.includes(movie.entry_id) ? (
-                              <><Check size={15} /> Saved with love ♡</>
-                            ) : reviewChanged ? (
-                              <><Save size={15} /> Save my review</>
-                            ) : (
-                              <><Check size={15} /> Review saved</>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <button onClick={() => deleteMovie(movie)} className="mt-3 flex items-center gap-1 text-xs text-[#987c7c] transition hover:text-[#713746]">
-                      <Trash2 size={13} /> Remove
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <div className="mt-5 flex items-center gap-2 text-[#b66c7c]">
+          <Heart size={12} fill="currentColor" />
+          <span className="text-[11px] sm:text-xs">
+            Made for the love of stories
+          </span>
+          <Heart size={12} fill="currentColor" />
+        </div>
       </section>
 
-      <footer className="px-2 py-8 pb-[calc(2rem+env(safe-area-inset-bottom))] text-center text-xs text-[#987c7c]">
-        Made with love, for the stories that stay. ♡
+      {/* COLLECTIONS */}
+      <section className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-12 sm:grid-cols-2 sm:gap-7">
+
+        {/* THE CINEMA */}
+        <Link
+          href="/cinema"
+          className="cinema-link group flex w-full flex-col overflow-visible p-1 transition duration-300 hover:-translate-y-1 sm:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.25em] text-[#a26f79] sm:text-[10px]">
+              Collection 01
+            </span>
+
+            <ArrowUpRight
+              size={19}
+              className="text-[#a26f79] transition group-hover:translate-x-1 group-hover:-translate-y-1"
+            />
+          </div>
+
+          {/* POPCORN */}
+          <div className="flex h-[205px] w-full items-center justify-center py-3 sm:h-[250px]">
+            <svg
+              viewBox="0 0 240 230"
+              className="h-full w-auto max-w-full overflow-visible"
+              fill="none"
+              aria-label="Animated popcorn bucket"
+              role="img"
+            >
+              {/* Kernels sitting in the bucket */}
+              <g fill="#f5d991" stroke="#c99c55" strokeWidth="1.8">
+                <path className="pop-kernel" d="M66 73 C49 65 56 46 71 49 C76 30 98 35 98 52 C114 42 128 59 116 73 C130 85 116 99 99 91 L73 91 C59 89 55 80 66 73Z" />
+
+                <path className="pop-kernel" d="M103 52 C94 37 109 25 120 35 C128 18 148 28 145 44 C162 40 170 58 155 69 C163 84 146 94 134 84 L112 74 C101 69 98 59 103 52Z" />
+
+                <path className="pop-kernel" d="M146 77 C137 64 150 52 162 60 C168 45 185 52 181 68 C197 65 202 83 188 92 C193 105 177 112 165 103 L150 92 C142 88 141 82 146 77Z" />
+
+                <path className="pop-kernel" d="M48 94 C35 83 43 69 56 73 C62 59 77 67 74 80 C89 77 95 93 82 101 C88 115 71 120 61 111 L48 105 C41 102 42 97 48 94Z" />
+
+                <path className="pop-kernel" d="M91 91 C80 79 93 67 104 75 C111 61 126 69 123 82 C138 80 143 96 131 105 C137 117 121 125 110 115 L96 106 C87 102 86 96 91 91Z" />
+              </g>
+
+              {/* Kernels that launch out of the bucket on hover */}
+              <g fill="#f5d991" stroke="#c99c55" strokeWidth="1.4">
+                {FLYING_KERNELS.map((kernel, index) => (
+                  <g
+                    key={index}
+                    className="fly-kernel"
+                    style={
+                      {
+                        "--dx": kernel.dx,
+                        "--peak": kernel.peak,
+                        "--rot": kernel.rot,
+                        "--delay": kernel.delay,
+                      } as React.CSSProperties
+                    }
+                  >
+                    <circle cx="120" cy="98" r="5.5" />
+                    <circle cx="127" cy="96" r="4.8" />
+                    <circle cx="123" cy="90" r="4.8" />
+                    <circle cx="116" cy="92" r="4.2" />
+                  </g>
+                ))}
+              </g>
+
+              <g className="pop-bucket">
+                <path
+                  d="M43 104 Q120 94 197 104 L181 207 Q179 216 169 216 L71 216 Q61 216 59 207Z"
+                  fill="#b66c7c"
+                  stroke="#713746"
+                  strokeWidth="3"
+                />
+
+                <path d="M62 103 L84 214 L105 214 L94 100Z" fill="#f9e9df" />
+                <path d="M117 99 L116 215 L139 215 L143 101Z" fill="#f9e9df" />
+
+                <path
+                  d="M43 102 Q120 91 197 102 L195 115 Q120 125 45 115Z"
+                  fill="#f8eae5"
+                  stroke="#713746"
+                  strokeWidth="3"
+                />
+
+                <path d="M65 137 L73 180" stroke="#713746" strokeWidth="2" opacity=".3" />
+                <path d="M175 137 L167 180" stroke="#713746" strokeWidth="2" opacity=".3" />
+                <path d="M65 207 Q120 218 175 207" stroke="#713746" strokeWidth="2" opacity=".4" />
+              </g>
+
+              {/* Sparkles */}
+              <g fill="#b66c7c">
+                <path className="corn-sparkle" d="M31 57 L35 68 L46 72 L35 76 L31 87 L27 76 L16 72 L27 68Z" />
+                <path className="corn-sparkle" d="M203 47 L206 56 L215 59 L206 62 L203 71 L200 62 L191 59 L200 56Z" />
+                <path className="corn-sparkle" d="M205 128 L208 135 L215 138 L208 141 L205 148 L202 141 L195 138 L202 135Z" />
+              </g>
+
+              {/* "pop!" appears on hover */}
+              <text
+                className="pop-text"
+                x="24"
+                y="36"
+                fontSize="20"
+                fontStyle="italic"
+                fontFamily="Georgia, serif"
+                fill="#b66c7c"
+                aria-hidden="true"
+              >
+                pop!
+              </text>
+            </svg>
+          </div>
+
+          {/* CINEMA TEXT */}
+          <div className="flex items-end justify-between gap-2 pt-2">
+            <div className="min-w-0">
+              <h2 className="font-serif text-[2rem] italic leading-tight sm:text-4xl">
+                The Cinema
+              </h2>
+
+              <p className="mt-2 text-xs text-[#987c7c] sm:text-sm">
+                Movies, series & memories
+              </p>
+            </div>
+
+            <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#713746] px-4 text-[11px] text-white transition group-hover:bg-[#8b4a5d] active:scale-95 sm:text-xs">
+              Explore ♡
+            </span>
+          </div>
+        </Link>
+
+        {/* THE LIBRARY */}
+        <Link
+          href="/library"
+          className="library-link group flex w-full flex-col overflow-visible p-1 transition duration-300 hover:-translate-y-1 sm:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-[0.25em] text-[#8d8975] sm:text-[10px]">
+              Collection 02
+            </span>
+
+            <ArrowUpRight
+              size={19}
+              className="text-[#8d8975] transition group-hover:translate-x-1 group-hover:-translate-y-1"
+            />
+          </div>
+
+          {/* OPEN BOOK */}
+          <div className="flex h-[205px] w-full items-center justify-center py-3 sm:h-[250px]">
+            <svg
+              viewBox="0 0 260 210"
+              className="h-full w-auto max-w-full overflow-visible"
+              fill="none"
+              aria-label="Animated open book"
+              role="img"
+            >
+              <defs>
+                <radialGradient id="bookGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#f5d991" stopOpacity=".6" />
+                  <stop offset="100%" stopColor="#f5d991" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* Warm reading-lamp glow that fades in on hover */}
+              <ellipse
+                className="book-glow"
+                cx="130"
+                cy="108"
+                rx="135"
+                ry="85"
+                fill="url(#bookGlow)"
+              />
+
+              {/* Sparkles */}
+              <g fill="#9b9879">
+                <path className="book-sparkle" d="M35 65 L40 78 L53 83 L40 88 L35 101 L30 88 L17 83 L30 78Z" />
+                <path className="book-sparkle" d="M222 44 L226 54 L236 58 L226 62 L222 72 L218 62 L208 58 L218 54Z" />
+                <path className="book-sparkle" d="M220 145 L224 154 L233 158 L224 162 L220 171 L216 162 L207 158 L216 154Z" />
+              </g>
+
+              <g className="book-hover">
+                {/* Shadow */}
+                <ellipse
+                  className="book-shadow"
+                  cx="130"
+                  cy="174"
+                  rx="91"
+                  ry="10"
+                  fill="#b9a995"
+                  opacity=".2"
+                />
+
+                <g className="book-float">
+                  {/* Left page */}
+                  <g>
+                    <path
+                      d="M130 65 C104 47 64 45 28 58 L37 157 C72 145 105 151 130 174Z"
+                      fill="#fff9ed"
+                      stroke="#65705c"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                    />
+
+                    <path d="M119 77 C93 65 67 64 43 72" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M119 93 C94 82 68 82 45 88" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M120 109 C95 98 70 99 47 104" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M120 125 C96 115 72 116 49 120" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M121 141 C96 132 75 133 51 136" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                  </g>
+
+                  {/* Right page */}
+                  <g>
+                    <path
+                      d="M130 65 C156 47 196 45 232 58 L223 157 C188 145 155 151 130 174Z"
+                      fill="#fffdf4"
+                      stroke="#65705c"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                    />
+
+                    <path d="M141 77 C167 65 193 64 217 72" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M141 93 C166 82 192 82 215 88" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M141 109 C166 98 190 99 213 104" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M141 125 C165 115 188 116 211 120" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M141 141 C165 132 186 133 209 136" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                  </g>
+
+                  {/* Centre binding */}
+                  <path
+                    d="M130 65 L130 174"
+                    stroke="#65705c"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+
+                  {/* Bookmark */}
+                  <g className="book-bookmark">
+                    <path
+                      d="M169 51 L169 104 L179 95 L189 104 L189 51Z"
+                      fill="#b66c7c"
+                      stroke="#713746"
+                      strokeWidth="2"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+
+                  {/* Little flower (it slowly spins) */}
+                  <g transform="translate(75 48)">
+                    <g className="book-flower" fill="#b66c7c">
+                      <circle cx="0" cy="-5" r="5" />
+                      <circle cx="5" cy="0" r="5" />
+                      <circle cx="0" cy="5" r="5" />
+                      <circle cx="-5" cy="0" r="5" />
+                      <circle cx="0" cy="0" r="2" fill="#f5d991" />
+                    </g>
+                  </g>
+
+                  {/* Pages that flip across the spine */}
+                  {[1, 2, 3].map((n) => (
+                    <g key={n} className={`flip-page flip-page-${n}`}>
+                      <path
+                        d="M130 65 C156 47 196 45 232 58 L223 157 C188 145 155 151 130 174Z"
+                        fill="#fff6e3"
+                        stroke="#65705c"
+                        strokeWidth="3"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M141 77 C167 65 193 64 217 72" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M141 93 C166 82 192 82 215 88" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M141 109 C166 98 190 99 213 104" stroke="#c5b99e" strokeWidth="2" strokeLinecap="round" />
+                    </g>
+                  ))}
+                </g>
+              </g>
+
+              {/* Words and symbols that escape the story on hover */}
+              {BOOK_GLYPHS.map((glyph, index) => (
+                <text
+                  key={index}
+                  className="rise-glyph"
+                  x={glyph.x}
+                  y="72"
+                  textAnchor="middle"
+                  fontSize={glyph.size}
+                  fontStyle="italic"
+                  fontFamily="Georgia, serif"
+                  fill={glyph.color}
+                  aria-hidden="true"
+                  style={
+                    {
+                      "--gx": glyph.gx,
+                      "--gy": glyph.gy,
+                      "--gr": glyph.gr,
+                      "--gd": glyph.delay,
+                    } as React.CSSProperties
+                  }
+                >
+                  {glyph.text}
+                </text>
+              ))}
+            </svg>
+          </div>
+
+          {/* LIBRARY TEXT */}
+          <div className="flex items-end justify-between gap-2 pt-2">
+            <div className="min-w-0">
+              <h2 className="font-serif text-[2rem] italic leading-tight sm:text-4xl">
+                The Library
+              </h2>
+
+              <p className="mt-2 text-xs text-[#85816e] sm:text-sm">
+                Books, notes & little thoughts
+              </p>
+            </div>
+
+            <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#65705c] px-4 text-[11px] text-white transition group-hover:bg-[#56604d] active:scale-95 sm:text-xs">
+              Explore ♡
+            </span>
+          </div>
+        </Link>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="mx-auto max-w-4xl pb-6 pt-14 text-center sm:py-12">
+        <p className="font-serif text-base italic text-[#987c7c] sm:text-lg">
+          Two ways to collect little pieces of life.
+        </p>
+
+        <p className="mt-3 text-[9px] uppercase tracking-[0.18em] text-[#b49a9c] sm:text-[10px] sm:tracking-[0.2em]">
+          brain rot & bookmarks · made with love ♡
+        </p>
       </footer>
     </main>
   );
 }
-    

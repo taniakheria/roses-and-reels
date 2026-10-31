@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -89,5 +90,877 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* 🌹 reel & rose — continuous rose rain */
+
+.rose-rain {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.rose-rain__flower {
+  position: absolute;
+  top: -8vh;
+  left: var(--rose-left);
+  display: block;
+  font-size: var(--rose-size);
+  line-height: 1;
+  opacity: var(--rose-opacity);
+  filter: drop-shadow(0 2px 3px rgba(99, 55, 71, 0.12));
+  animation: rose-rain-fall var(--rose-duration) var(--rose-delay) linear infinite;
+  will-change: transform;
+}
+
+@keyframes rose-rain-fall {
+  0% {
+    transform: translate3d(0, -8vh, 0) rotate(-20deg);
+  }
+
+  25% {
+    transform: translate3d(
+      calc(var(--rose-drift) * 0.35),
+      24vh,
+      0
+    ) rotate(75deg);
+  }
+
+  50% {
+    transform: translate3d(
+      calc(var(--rose-drift) * -0.25),
+      52vh,
+      0
+    ) rotate(175deg);
+  }
+
+  75% {
+    transform: translate3d(
+      calc(var(--rose-drift) * 0.6),
+      78vh,
+      0
+    ) rotate(260deg);
+  }
+
+  100% {
+    transform: translate3d(
+      var(--rose-drift),
+      112vh,
+      0
+    ) rotate(360deg);
+  }
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .rose-rain {
+    display: none;
+  }
+}
+
+
+/* reel & rose — delicate falling petals */
+
+.petal-rain {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.petal-rain__petal {
+  position: absolute;
+  top: -10px;
+  left: var(--petal-left);
+  width: var(--petal-size);
+  height: calc(var(--petal-size) * 1.5);
+  display: block;
+  opacity: var(--petal-opacity);
+
+  background: linear-gradient(
+    145deg,
+    #f7cbd5 0%,
+    #e9aebd 65%,
+    #e4a1b2 100%
+  );
+
+  border-radius: 85% 0 85% 0;
+
+  filter: blur(0.15px);
+
+  animation: petal-fall
+    var(--petal-duration)
+    var(--petal-delay)
+    linear infinite;
+
+  will-change: transform;
+}
+
+@keyframes petal-fall {
+  0% {
+    transform: translate3d(0, -5vh, 0)
+      rotate(var(--petal-rotation));
+  }
+
+  25% {
+    transform: translate3d(
+      calc(var(--petal-drift) * 0.35),
+      24vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 80deg));
+  }
+
+  50% {
+    transform: translate3d(
+      calc(var(--petal-drift) * -0.25),
+      52vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 170deg));
+  }
+
+  75% {
+    transform: translate3d(
+      calc(var(--petal-drift) * 0.6),
+      78vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 260deg));
+  }
+
+  100% {
+    transform: translate3d(
+      var(--petal-drift),
+      110vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 360deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal-rain {
+    display: none;
+  }
+}
+
+
+
+/* =========================================
+   REEL & ROSE — FALLING PETALS
+========================================= */
+
+.petal-rain {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.petal-rain__petal {
+  position: absolute;
+  top: -12px;
+  left: var(--petal-left);
+  width: var(--petal-size);
+  height: calc(var(--petal-size) * 1.55);
+  display: block;
+  opacity: var(--petal-opacity);
+
+  background: linear-gradient(
+    145deg,
+    #f8d5dc 0%,
+    #edb5c2 65%,
+    #df9dad 100%
+  );
+
+  border-radius: 85% 0 85% 0;
+
+  filter: drop-shadow(
+    0 1px 2px rgba(160, 103, 119, 0.10)
+  );
+
+  animation: petal-fall
+    var(--petal-duration)
+    var(--petal-delay)
+    linear infinite;
+
+  will-change: transform;
+}
+
+@keyframes petal-fall {
+  0% {
+    transform: translate3d(0, -5vh, 0)
+      rotate(var(--petal-rotation));
+  }
+
+  25% {
+    transform: translate3d(
+      calc(var(--petal-drift) * .35),
+      24vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 80deg));
+  }
+
+  50% {
+    transform: translate3d(
+      calc(var(--petal-drift) * -.25),
+      52vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 170deg));
+  }
+
+  75% {
+    transform: translate3d(
+      calc(var(--petal-drift) * .6),
+      78vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 260deg));
+  }
+
+  100% {
+    transform: translate3d(
+      var(--petal-drift),
+      110vh,
+      0
+    ) rotate(calc(var(--petal-rotation) + 360deg));
+  }
+}
+
+
+/* =========================================
+   REEL & ROSE — SLEEPY READING CAT
+========================================= */
+
+.sleepy-cat {
+  position: fixed;
+  right: 22px;
+  bottom: 12px;
+  z-index: 40;
+  width: 112px;
+  text-align: center;
+  pointer-events: none;
+  transform-origin: bottom center;
+  animation: cat-breathe 4s ease-in-out infinite;
+}
+
+.sleepy-cat__drawing {
+  width: 100%;
+  overflow: visible;
+}
+
+.sleepy-cat__tail {
+  transform-origin: 117px 66px;
+  animation: cat-tail 3.8s ease-in-out infinite;
+}
+
+.sleepy-cat.tail-flick .sleepy-cat__tail {
+  animation: cat-tail-flick .75s ease-in-out;
+}
+
+.sleepy-cat.is-sleeping {
+  animation: cat-sleep 3.5s ease-in-out infinite;
+}
+
+.sleepy-cat.is-sleeping .sleepy-cat__drawing {
+  transform: rotate(-7deg) scale(.94);
+}
+
+.sleepy-cat.is-stretching {
+  animation: cat-stretch 2.2s ease-in-out;
+}
+
+.sleepy-cat.is-stretching .sleepy-cat__drawing {
+  animation: cat-body-stretch 2.2s ease-in-out;
+}
+
+.sleepy-cat.is-stretching .sleepy-cat__tail {
+  animation: cat-tail-flick 1s ease-in-out;
+}
+
+@keyframes cat-body-stretch {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.12, 0.88) translateY(3px);
+  }
+  55% {
+    transform: scale(0.92, 1.12) translateY(-5px);
+  }
+  75% {
+    transform: scale(1.06, 0.95);
+  }
+}
+
+.sleepy-cat__caption {
+  display: block;
+  margin-top: -5px;
+  color: #aa8d81;
+  font: italic 10px Georgia, serif;
+  opacity: .8;
+}
+
+.sleepy-cat__z,
+.sleepy-cat__zz {
+  position: absolute;
+  color: #b58e9a;
+  font: italic 17px Georgia, serif;
+  animation: z-drift 2.3s ease-out infinite;
+}
+
+.sleepy-cat__z {
+  right: 23px;
+  top: -3px;
+}
+
+.sleepy-cat__zz {
+  right: 9px;
+  top: -19px;
+  animation-delay: .8s;
+  font-size: 13px;
+}
+
+
+/* CAT ANIMATIONS */
+
+@keyframes cat-breathe {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes cat-tail {
+  0%, 85%, 100% {
+    transform: rotate(0);
+  }
+  90% {
+    transform: rotate(12deg);
+  }
+  95% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes cat-tail-flick {
+  0%, 100% {
+    transform: rotate(0);
+  }
+  35% {
+    transform: rotate(25deg);
+  }
+  70% {
+    transform: rotate(-17deg);
+  }
+}
+
+@keyframes cat-sleep {
+  0%, 100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(2px) rotate(-2deg);
+  }
+}
+
+@keyframes cat-stretch {
+  0%, 100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.08,.92) translateY(3px);
+  }
+  70% {
+    transform: scale(.96,1.08) translateY(-4px);
+  }
+}
+
+@keyframes z-drift {
+  0% {
+    opacity: 0;
+    transform: translate(0,8px) scale(.8);
+  }
+  30% {
+    opacity: .8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(9px,-22px) scale(1.1);
+  }
+}
+
+
+/* MOBILE + ACCESSIBILITY */
+
+@media (max-width: 640px) {
+  .sleepy-cat {
+    right: 8px;
+    bottom: 8px;
+    width: 82px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal-rain {
+    display: none;
+  }
+
+  .sleepy-cat,
+  .sleepy-cat * {
+    animation: none !important;
+  }
+}
+
+
+/* =========================================
+   REEL & ROSE — MAGICAL FIREFLIES
+========================================= */
+
+.fireflies-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.firefly {
+  position: absolute;
+  width: var(--fly-size);
+  height: var(--fly-size);
+  border-radius: 50%;
+  background: #ffe9a6;
+  opacity: 0.55;
+
+  box-shadow:
+    0 0 5px 2px rgba(255, 222, 139, 0.55),
+    0 0 13px 4px rgba(255, 204, 105, 0.25);
+
+  transform: translate(-50%, -50%);
+  transition:
+    left 1.1s ease,
+    top 1.1s ease,
+    opacity .5s ease,
+    box-shadow .5s ease;
+
+  animation: firefly-glow 2.8s ease-in-out infinite;
+  animation-delay: var(--fly-delay);
+}
+
+.firefly-active {
+  opacity: .95;
+  box-shadow:
+    0 0 7px 3px rgba(255, 231, 157, .8),
+    0 0 20px 7px rgba(255, 202, 105, .45);
+}
+
+.firefly-lantern {
+  left: calc(50% + var(--fly-x)) !important;
+  top: calc(48% + var(--fly-y)) !important;
+  opacity: 1;
+  box-shadow:
+    0 0 9px 4px rgba(255, 232, 161, .9),
+    0 0 24px 10px rgba(255, 198, 92, .55);
+}
+
+@keyframes firefly-glow {
+  0%, 100% {
+    filter: brightness(.8);
+    scale: .85;
+  }
+
+  50% {
+    filter: brightness(1.5);
+    scale: 1.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .firefly {
+    animation: none;
+  }
+}
+
+
+/* =========================================
+   REEL & ROSE — MAGICAL MUSHROOMS
+========================================= */
+
+.mushroom-garden {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.tiny-mushroom {
+  position: absolute;
+  width: var(--mushroom-size);
+  height: var(--mushroom-size);
+  opacity: .78;
+  transform: translate(-50%, -50%) scale(.85);
+  filter: drop-shadow(0 2px 5px rgba(177, 126, 111, .22));
+  transition:
+    left .8s ease,
+    top .8s ease,
+    transform .6s ease,
+    filter .6s ease;
+  animation: mushroom-float 3s ease-in-out infinite;
+  animation-delay: var(--mushroom-delay);
+}
+
+.tiny-mushroom.mushroom-growing {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.65);
+  filter:
+    drop-shadow(0 0 7px rgba(236, 185, 133, .8))
+    drop-shadow(0 0 15px rgba(230, 174, 128, .45));
+}
+
+@keyframes mushroom-float {
+  0%, 100% {
+    margin-top: 0;
+  }
+  50% {
+    margin-top: -7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tiny-mushroom {
+    animation: none;
+    transition: none;
+  }
+}
+
+
+/* =====================================
+   BRAINROT & BOOKMARKS BRAND
+===================================== */
+
+.brand-logo {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  color: #633747;
+  text-decoration: none;
+  white-space: nowrap;
+  line-height: 1;
+  isolation: isolate;
+}
+
+.brand-topline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.brand-brain {
+  display: inline-block;
+  color: #633747;
+  font-size: 31px;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  min-width: 132px;
+  text-align: center;
+  transform-origin: center;
+}
+
+.brand-logo:hover .brand-brain {
+  animation: brain-shake 0.38s ease-in-out;
+}
+
+.brand-ribbon {
+  display: block;
+  flex: 0 0 auto;
+  width: 19px;
+  height: 29px;
+  transform-origin: top center;
+  opacity: 0;
+  transform: translateY(-14px) rotate(8deg);
+  animation: ribbon-land 0.65s cubic-bezier(.2,.8,.3,1.3) 1.05s forwards;
+}
+
+.brand-book {
+  display: inline-flex;
+  align-items: baseline;
+  color: #b66c7c;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.brand-book-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.brand-eye {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 0.49em;
+  height: 0.49em;
+  margin-inline: 0.015em;
+  top: 0.025em;
+  align-items: center;
+  justify-content: center;
+  border: 1.3px solid #b66c7c;
+  border-radius: 50%;
+  background: #fffdf8;
+  overflow: hidden;
+  transform: scaleY(1);
+  transition: transform 0.2s ease;
+}
+
+.brand-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40%;
+  height: 40%;
+  border-radius: 50%;
+  background: #633747;
+  transform: translate(
+    calc(-50% + var(--pupil-x, 0px)),
+    calc(-50% + var(--pupil-y, 0px))
+  );
+  transition: transform 0.08s ease-out;
+}
+
+.brand-pupil::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  right: 10%;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: white;
+}
+
+.brand-logo:hover .brand-eye {
+  transform: scaleY(1.18);
+}
+
+@keyframes brain-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-2deg) translateY(-1px); }
+  45% { transform: rotate(2deg) translateY(1px); }
+  70% { transform: rotate(-1deg); }
+}
+
+@keyframes ribbon-land {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) rotate(8deg);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(3px) rotate(-5deg);
+  }
+  82% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+}
+
+/* Mobile: two tidy lines, never below 22px */
+@media (max-width: 480px) {
+  .brand-logo {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .brand-topline {
+    gap: 7px;
+  }
+
+  .brand-brain {
+    font-size: 25px;
+    min-width: auto;
+  }
+
+  .brand-ribbon {
+    width: 16px;
+    height: 24px;
+  }
+
+  .brand-book {
+    font-size: 23px;
+  }
+}
+
+/* BRAINROT & BOOKMARKS BRAND */
+
+.brand-logo {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #633747;
+  text-decoration: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.brand-topline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.brand-brain {
+  display: inline-block;
+  color: #633747;
+  font-size: 31px;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  min-width: 132px;
+  text-align: center;
+  transform-origin: center;
+}
+
+.brand-logo:hover .brand-brain {
+  animation: brain-shake 0.38s ease-in-out;
+}
+
+.brand-ampersand {
+  display: inline-block;
+  color: #65705c;
+  font-family: Georgia, serif;
+  font-size: 25px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+  margin-inline: 3px;
+}
+
+.brand-book {
+  display: inline-flex;
+  align-items: baseline;
+  color: #b66c7c;
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.brand-book-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.brand-eye {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 0.49em;
+  height: 0.49em;
+  margin-inline: 0.015em;
+  top: 0.025em;
+  align-items: center;
+  justify-content: center;
+  border: 1.3px solid #b66c7c;
+  border-radius: 50%;
+  background: #fffdf8;
+  overflow: hidden;
+  transform: scaleY(1);
+  transition: transform 0.2s ease;
+}
+
+.brand-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40%;
+  height: 40%;
+  border-radius: 50%;
+  background: #633747;
+  transform: translate(
+    calc(-50% + var(--pupil-x, 0px)),
+    calc(-50% + var(--pupil-y, 0px))
+  );
+  transition: transform 0.08s ease-out;
+}
+
+.brand-pupil::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  right: 10%;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: white;
+}
+
+.brand-logo:hover .brand-eye {
+  transform: scaleY(1.18);
+}
+
+@keyframes brain-shake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-2deg) translateY(-1px); }
+  45% { transform: rotate(2deg) translateY(1px); }
+  70% { transform: rotate(-1deg); }
+}
+
+@media (max-width: 480px) {
+  .brand-logo {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .brand-topline {
+    gap: 7px;
+  }
+
+  .brand-brain {
+    font-size: 25px;
+    min-width: auto;
+  }
+
+  .brand-ampersand {
+    font-size: 22px;
+  }
+
+  .brand-book {
+    font-size: 23px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo:hover .brand-brain {
+    animation: none;
+  }
+
+  .brand-book,
+  .brand-pupil {
+    transition: none;
+  }
 }
