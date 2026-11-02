@@ -330,14 +330,14 @@ export default function Home() {
       `}</style>
 
       {/* HEADER */}
-      <header className="relative mx-auto flex w-full max-w-5xl items-center justify-end gap-3 py-2">
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+      <header className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-3 py-2 sm:flex-row sm:justify-end sm:gap-3">
+        <div className="flex w-full justify-center sm:absolute sm:left-1/2 sm:top-1/2 sm:w-auto sm:-translate-x-1/2 sm:-translate-y-1/2">
           <Brand />
         </div>
 
         <Link
           href="/login"
-          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#713746] px-4 py-2 text-xs text-white transition hover:bg-[#8b4a5d] active:scale-95 sm:px-5 sm:text-sm"
+          className="inline-flex min-h-10 shrink-0 self-end items-center justify-center rounded-full bg-[#713746] px-4 py-2 text-xs text-white transition hover:bg-[#8b4a5d] active:scale-95 sm:self-auto sm:px-5 sm:text-sm"
         >
           Account ♡
         </Link>
