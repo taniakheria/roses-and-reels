@@ -21,6 +21,7 @@ export async function proxy(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
+
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
@@ -37,12 +38,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Always validate the user with Supabase.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refresh and validate the user's session.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims;
 
-  // Only these pages require authentication.
+  // Protect only Cinema and Library.
   const protectedPaths = ["/cinema", "/library", "/protected"];
 
   const isProtectedPage = protectedPaths.some(
@@ -53,6 +53,7 @@ export async function proxy(request: NextRequest) {
 
   if (isProtectedPage && !user) {
     const loginUrl = request.nextUrl.clone();
+
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", request.nextUrl.pathname);
 

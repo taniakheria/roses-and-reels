@@ -2,7 +2,7 @@
 
 
 import Link from "next/link";
-import { ArrowUpRight, Heart } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 import Brand from "@/components/Brand";
 
@@ -344,34 +344,8 @@ export default function Home() {
       </header>
 
 
-      {/* HERO */}
-      <section className="mx-auto flex w-full max-w-5xl flex-col items-center pb-8 pt-16 text-center sm:pb-14 sm:pt-24">
-        <p className="mb-4 text-[9px] uppercase tracking-[0.28em] text-[#a26f79] sm:text-xs sm:tracking-[0.3em]">
-          A little corner of your world
-        </p>
-
-        <h1 className="font-serif text-[2.65rem] italic leading-[1.15] tracking-tight sm:text-6xl md:text-7xl">
-          Stories we watch.
-          <br />
-          <span className="text-[#b66c7c]">Stories we read.</span>
-        </h1>
-
-        <p className="mt-5 max-w-[310px] text-[13px] leading-6 text-[#987c7c] sm:max-w-md sm:text-base sm:leading-7">
-          A personal collection of films, books, little thoughts
-          and stories worth remembering.
-        </p>
-
-        <div className="mt-5 flex items-center gap-2 text-[#b66c7c]">
-          <Heart size={12} fill="currentColor" />
-          <span className="text-[11px] sm:text-xs">
-            Made for the love of stories
-          </span>
-          <Heart size={12} fill="currentColor" />
-        </div>
-      </section>
-
       {/* COLLECTIONS */}
-      <section className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-12 sm:grid-cols-2 sm:gap-7">
+      <section className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-12 pt-8 sm:grid-cols-2 sm:gap-7 sm:pt-10">
 
         {/* THE CINEMA */}
         <Link
@@ -692,7 +666,7 @@ export default function Home() {
       {/* FOOTER */}
       <footer className="mx-auto max-w-4xl pb-6 pt-14 text-center sm:py-12">
         <p className="font-serif text-base italic text-[#987c7c] sm:text-lg">
-          Two ways to collect little pieces of life.
+          Stories we watch. Stories we read.
         </p>
 
         <p className="mt-3 text-[9px] uppercase tracking-[0.18em] text-[#b49a9c] sm:text-[10px] sm:tracking-[0.2em]">
