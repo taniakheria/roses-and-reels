@@ -330,19 +330,66 @@ export default function Home() {
       `}</style>
 
       {/* HEADER */}
-      <header className="relative mx-auto flex w-full max-w-5xl flex-col items-center gap-3 py-2 sm:flex-row sm:justify-end sm:gap-3">
-        <div className="flex w-full justify-center sm:absolute sm:left-1/2 sm:top-1/2 sm:w-auto sm:-translate-x-1/2 sm:-translate-y-1/2">
-          <Brand />
-        </div>
+      <header className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 py-2 sm:flex-row sm:gap-6">
+        <Brand />
+
+        <nav
+          aria-label="Main navigation"
+          className="flex items-center gap-1 rounded-full border border-[#eadbd2] bg-white/70 p-1 shadow-sm backdrop-blur-sm"
+        >
+          <Link
+            href="/cinema"
+            className="rounded-full px-4 py-2 text-xs font-medium text-[#713746] transition hover:bg-[#f4e7e7] sm:text-sm"
+          >
+            Films
+          </Link>
+          <span aria-hidden="true" className="h-4 w-px bg-[#e8d8d1]" />
+          <Link
+            href="/library"
+            className="rounded-full px-4 py-2 text-xs font-medium text-[#65705c] transition hover:bg-[#edf0e8] sm:text-sm"
+          >
+            Books
+          </Link>
+        </nav>
 
         <Link
           href="/login"
-          className="inline-flex min-h-10 shrink-0 self-end items-center justify-center rounded-full bg-[#713746] px-4 py-2 text-xs text-white transition hover:bg-[#8b4a5d] active:scale-95 sm:self-auto sm:px-5 sm:text-sm"
+          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-[#713746] px-4 py-2 text-xs text-white transition hover:bg-[#8b4a5d] active:scale-95 sm:px-5 sm:text-sm"
         >
           Account ♡
         </Link>
       </header>
 
+      {/* WELCOME / WHAT THIS WEBSITE IS */}
+      <section className="mx-auto max-w-4xl px-2 pb-2 pt-12 text-center sm:pt-16">
+        <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-[#a26f79] sm:text-xs">
+          Your personal story archive
+        </p>
+
+        <h1 className="mx-auto mt-4 max-w-3xl font-serif text-4xl leading-[1.08] text-[#633747] sm:text-6xl">
+          For the stories you watch, read, and keep close.
+        </h1>
+
+        <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-[#927d76] sm:text-base">
+          Brainrot &amp; Bookmarks is your own little corner to keep track of
+          the films and series you love, the books you are reading, and the
+          stories you want to come back to. Build watchlists and reading
+          shelves, save favourites, and keep the little notes that make each
+          story yours.
+        </p>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          <span className="rounded-full border border-[#ead7d8] bg-white/65 px-3 py-1.5 text-[11px] text-[#8f6570]">
+            Watchlists &amp; favourites
+          </span>
+          <span className="rounded-full border border-[#e0e4d8] bg-white/65 px-3 py-1.5 text-[11px] text-[#68745f]">
+            Reading shelves
+          </span>
+          <span className="rounded-full border border-[#ead7d8] bg-white/65 px-3 py-1.5 text-[11px] text-[#8f6570]">
+            Notes &amp; memories
+          </span>
+        </div>
+      </section>
 
       {/* COLLECTIONS */}
       <section className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-12 pt-8 sm:grid-cols-2 sm:gap-7 sm:pt-10">
@@ -462,7 +509,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-xs text-[#987c7c] sm:text-sm">
-                Movies, series & memories
+                Track what you watch, what is next, and what stays with you
               </p>
             </div>
 
@@ -652,7 +699,7 @@ export default function Home() {
               </h2>
 
               <p className="mt-2 text-xs text-[#85816e] sm:text-sm">
-                Books, notes & little thoughts
+                Keep your reading lists, favourite books, notes, and reviews together
               </p>
             </div>
 

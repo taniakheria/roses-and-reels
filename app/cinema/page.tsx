@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from "react";
+import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -15,9 +20,16 @@ import {
   Save,
   Film,
   X,
+  MoreHorizontal,
+  Play,
+  Tv,
 } from "lucide-react";
 
 import Brand from "@/components/Brand";
+
+/* ---------- types ---------- */
+
+type Status = "watchlist" | "currently_watching" | "watched";
 
 type Movie = {
   id: number;
@@ -27,11 +39,12 @@ type Movie = {
   overview: string;
   release_date: string;
   genre_ids: number[];
+  original_language?: string;
 };
 
 type Entry = Movie & {
   entry_id: string;
-  status: "watchlist" | "currently_watching" | "watched";
+  status: Status;
   rating: number | null;
   review: string;
   is_favorite: boolean;
@@ -46,7 +59,13 @@ type Petal = {
   symbol: string;
 };
 
+type Flash = { id: string; kind: "watched" | "started" } | null;
+type Kind = "all" | "movie" | "tv";
+type Sort = "recent" | "title" | "rating" | "year";
+
 const supabase = createClient();
+
+/* ---------- constants ---------- */
 
 const sparklePositions = [
   { left: "8%", top: "18%" },
@@ -71,11 +90,19 @@ const ratingLabels = [
   "Absolutely iconic!",
 ];
 
-const statusLabels: Record<Entry["status"], string> = {
+const statusLabels: Record<Status, string> = {
   watchlist: "On your watchlist",
   currently_watching: "Now playing",
   watched: "Watched",
 };
+
+const moveLabels: Record<Status, string> = {
+  watchlist: "Move to watchlist",
+  currently_watching: "Start watching",
+  watched: "Mark as watched",
+};
+
+const statusOrder: Status[] = ["watchlist", "currently_watching", "watched"];
 
 const tabs: [string, string][] = [
   ["watchlist", "Watchlist"],
@@ -85,27 +112,118 @@ const tabs: [string, string][] = [
   ["all", "Everything"],
 ];
 
+const emptyCopy: Record<string, { emoji: string; title: string; text: string }> = {
+  watchlist: {
+    emoji: "🍿 🌷",
+    title: "Nothing waiting yet.",
+    text: "Search for a title above and save it for a cosy night in.",
+  },
+  currently_watching: {
+    emoji: "🎬 ✨",
+    title: "Nothing playing right now.",
+    text: "Press “Start watching” on a watchlist title to see it here.",
+  },
+  watched: {
+    emoji: "🎞️ 🌸",
+    title: "No finished stories yet.",
+    text: "Mark a title as watched to rate it and write a review.",
+  },
+  favourites: {
+    emoji: "💌 🌷",
+    title: "No favourites yet.",
+    text: "Tap the heart on any poster to keep it close.",
+  },
+  all: {
+    emoji: "🎬 🌷",
+    title: "A blank page, for now.",
+    text: "Search for a title above and add it to your diary.",
+  },
+};
+
 const searchHints = [
-  "Search movies or TV shows…",
+  "Search a film or series…",
   "Try “Pride & Prejudice”…",
   "Try “Spirited Away”…",
   "Try “Before Sunrise”…",
   "Try “Little Women”…",
 ];
 
-const petalSymbols = ["🌸", "🌷", "✿", "❀", "🍃"];
+const genreNames: Record<number, string> = {
+  28: "Action",
+  12: "Adventure",
+  16: "Animation",
+  35: "Comedy",
+  80: "Crime",
+  99: "Documentary",
+  18: "Drama",
+  10751: "Family",
+  14: "Fantasy",
+  36: "History",
+  27: "Horror",
+  10402: "Music",
+  9648: "Mystery",
+  10749: "Romance",
+  878: "Sci-fi",
+  53: "Thriller",
+  10752: "War",
+  10759: "Action & Adventure",
+  10765: "Sci-fi & Fantasy",
+};
 
-/* Pinterest-style: posters get slightly different crops so the board feels uneven and organic */
-const posterRatios = ["aspect-[2/3]", "aspect-[3/4]", "aspect-[2/3]", "aspect-[5/7]"];
+const sortLabels: Record<Sort, string> = {
+  recent: "Recently added",
+  title: "Title A–Z",
+  rating: "Highest rated",
+  year: "Newest release",
+};
+
+const petalSymbols = ["🌸", "🌷", "✿", "❀", "🍃"];
 
 const heroWords = ["Every", "story", "leaves", "a", "little"];
 
-/* ---------- helpers ---------- */
+/** Where each polaroid sits in the hero stack. The top slot has the highest z. */
+const polaroidSlots = [
+  { x: 0, y: 46, r: -9, z: 1 },
+  { x: 74, y: 4, r: 3, z: 3 },
+  { x: 142, y: 56, r: 10, z: 2 },
+];
 
-function useTypewriter(phrases: string[]) {
+const burstVectors: [number, number][] = [
+  [-30, -34],
+  [0, -46],
+  [30, -34],
+  [-44, -6],
+  [44, -6],
+  [-24, 26],
+  [24, 26],
+];
+
+/* ---------- helpers & hooks ---------- */
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  return reduced;
+}
+
+/** Types placeholder hints. Pauses while `active` is false. */
+function useTypewriter(phrases: string[], active: boolean) {
   const [text, setText] = useState("");
 
   useEffect(() => {
+    if (!active) {
+      setText("");
+      return;
+    }
+
     let phraseIndex = 0;
     let charIndex = 0;
     let deleting = false;
@@ -138,12 +256,44 @@ function useTypewriter(phrases: string[]) {
 
     timer = setTimeout(step, 600);
     return () => clearTimeout(timer);
-  }, [phrases]);
+  }, [phrases, active]);
 
   return text;
 }
 
-function handleTilt(event: MouseEvent<HTMLElement>) {
+/** Eases a number toward its target. Returns a formatted string. */
+function useCountUp(target: number, decimals: number, reduced: boolean) {
+  const [value, setValue] = useState(0);
+  const current = useRef(0);
+
+  useEffect(() => {
+    if (reduced) {
+      current.current = target;
+      setValue(target);
+      return;
+    }
+
+    const start = current.current;
+    const began = performance.now();
+    let frame = 0;
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - began) / 900, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const next = start + (target - start) * eased;
+      current.current = next;
+      setValue(next);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, reduced]);
+
+  return decimals ? value.toFixed(decimals) : Math.round(value).toString();
+}
+
+function handleTilt(event: ReactMouseEvent<HTMLElement>) {
   const el = event.currentTarget;
   const rect = el.getBoundingClientRect();
   const x = (event.clientX - rect.left) / rect.width - 0.5;
@@ -155,10 +305,18 @@ function handleTilt(event: MouseEvent<HTMLElement>) {
   el.style.setProperty("--my", `${(y + 0.5) * 100}%`);
 }
 
-function resetTilt(event: MouseEvent<HTMLElement>) {
+function resetTilt(event: ReactMouseEvent<HTMLElement>) {
   const el = event.currentTarget;
   el.style.setProperty("--ry", "0deg");
   el.style.setProperty("--rx", "0deg");
+}
+
+function nextStatus(status: Status): Status {
+  return status === "watchlist"
+    ? "currently_watching"
+    : status === "currently_watching"
+      ? "watched"
+      : "watchlist";
 }
 
 /** How many columns fit the screen. */
@@ -202,7 +360,7 @@ function Masonry<T>({
   });
 
   return (
-    <div className="flex items-start gap-4 sm:gap-5">
+    <div className="flex w-full items-start gap-4 sm:gap-5">
       {columns.map((column, columnIndex) => (
         <div key={columnIndex} className="flex min-w-0 flex-1 flex-col gap-6">
           {column.map(({ item, index }) => render(item, index))}
@@ -212,18 +370,161 @@ function Masonry<T>({
   );
 }
 
+/* ---------- small components ---------- */
+
+function PosterImage({
+  path,
+  alt,
+  size = 28,
+}: {
+  path: string;
+  alt: string;
+  size?: number;
+}) {
+  if (!path) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#f4e3d9] via-[#ead7df] to-[#e5e8d9] text-[#9b766f]">
+        <Film size={size} />
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      fill
+      unoptimized
+      src={`https://image.tmdb.org/t/p/w500${path}`}
+      alt={alt}
+      className="object-cover"
+    />
+  );
+}
+
+/** A tiny clapperboard whose arm snaps shut. */
+function Clapper() {
+  return (
+    <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+      <g className="clap-arm">
+        <rect x="6" y="12" width="52" height="12" rx="2.5" fill="#713746" />
+        <polygon points="14,12 22,12 16,24 8,24" fill="#fffdfa" />
+        <polygon points="30,12 38,12 32,24 24,24" fill="#fffdfa" />
+        <polygon points="46,12 54,12 48,24 40,24" fill="#fffdfa" />
+      </g>
+      <rect
+        x="6"
+        y="27"
+        width="52"
+        height="26"
+        rx="3"
+        fill="#fffdfa"
+        stroke="#713746"
+        strokeWidth="3"
+      />
+      <path d="M14 38h22M14 45h14" stroke="#c77d91" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function HeartBurst() {
+  return (
+    <span className="burst" aria-hidden="true">
+      {burstVectors.map(([x, y], index) => (
+        <span
+          key={index}
+          className="burst-heart"
+          style={
+            {
+              "--dx": `${x}px`,
+              "--dy": `${y}px`,
+              animationDelay: `${index * 25}ms`,
+            } as CSSProperties
+          }
+        >
+          ♥
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  decimals = 0,
+  icon,
+  reduced,
+  delay,
+}: {
+  label: string;
+  value: number | null;
+  decimals?: number;
+  icon: ReactNode;
+  reduced: boolean;
+  delay: number;
+}) {
+  const shown = useCountUp(value ?? 0, decimals, reduced);
+
+  return (
+    <div
+      className="reveal rounded-3xl border border-[#eadfd5] bg-white/70 px-5 py-4 backdrop-blur-sm"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-display text-3xl tabular-nums sm:text-4xl">
+          {value === null ? "—" : shown}
+        </span>
+        <span className="text-[#c99aa4]">{icon}</span>
+      </div>
+      <p className="mt-1 text-xs text-[#987c7c]">{label}</p>
+    </div>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`min-h-9 shrink-0 rounded-full border px-3.5 py-1.5 text-xs transition active:scale-95 ${
+        active
+          ? "border-[#713746] bg-[#713746] text-white shadow-sm"
+          : "border-[#e6d6d0] bg-white/70 text-[#876d70] hover:border-[#b66c7c] hover:text-[#713746]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 /* ---------- page ---------- */
 
 export default function Home() {
+  const reduced = usePrefersReducedMotion();
+
   const [userId, setUserId] = useState("");
   const [movies, setMovies] = useState<Entry[]>([]);
   const [results, setResults] = useState<Movie[]>([]);
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [tab, setTab] = useState("watchlist");
+  const [kind, setKind] = useState<Kind>("all");
+  const [genre, setGenre] = useState(0);
+  const [hindiOnly, setHindiOnly] = useState(false);
+  const [sort, setSort] = useState<Sort>("recent");
   const [busy, setBusy] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState("");
+  const [confirmRemoveId, setConfirmRemoveId] = useState("");
+  const [removingId, setRemovingId] = useState("");
   const [statusBusyId, setStatusBusyId] = useState("");
-  const [ratingBusyId, setRatingBusyId] = useState("");
-  const [favoriteBusyId, setFavoriteBusyId] = useState("");
   const [reviewBusyId, setReviewBusyId] = useState("");
   const [reviewDrafts, setReviewDrafts] = useState<Record<string, string>>({});
   const [savedReviews, setSavedReviews] = useState<string[]>([]);
@@ -231,23 +532,115 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [celebrating, setCelebrating] = useState(false);
   const [ratingPop, setRatingPop] = useState("");
+  const [hoverRating, setHoverRating] = useState(0);
   const [favoritePop, setFavoritePop] = useState("");
+  const [burstId, setBurstId] = useState("");
   const [petals, setPetals] = useState<Petal[]>([]);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [selectedId, setSelectedId] = useState("");
+  const [flash, setFlash] = useState<Flash>(null);
+  const [linger, setLinger] = useState<Set<string>>(new Set());
+  const [leavingId, setLeavingId] = useState("");
+  const [shuffle, setShuffle] = useState(0);
 
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const petalCounter = useRef(0);
-  const placeholder = useTypewriter(searchHints);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  const placeholder = useTypewriter(
+    searchHints,
+    !reduced && !searchFocused && !query
+  );
 
   const selected = movies.find((movie) => movie.entry_id === selectedId) ?? null;
 
+  /* ---------- derived data ---------- */
+
+  const counts = useMemo(
+    () => ({
+      watchlist: movies.filter((m) => m.status === "watchlist").length,
+      currently_watching: movies.filter((m) => m.status === "currently_watching").length,
+      watched: movies.filter((m) => m.status === "watched").length,
+      favourites: movies.filter((m) => m.is_favorite).length,
+      all: movies.length,
+    }),
+    [movies]
+  );
+
+  const countsKey = Object.values(counts).join("-");
+
+  const averageRating = useMemo(() => {
+    const rated = movies.filter((m) => m.rating);
+    if (rated.length === 0) return null;
+    return rated.reduce((sum, m) => sum + (m.rating ?? 0), 0) / rated.length;
+  }, [movies]);
+
+  const savedKeys = useMemo(
+    () => new Set(movies.map((m) => `${m.media_type}-${m.id}`)),
+    [movies]
+  );
+
+  /** Genres that actually appear in the collection, most common first. */
+  const genreChips = useMemo(() => {
+    const tally = new Map<number, number>();
+    movies.forEach((m) =>
+      m.genre_ids.forEach((id) => {
+        if (genreNames[id]) tally.set(id, (tally.get(id) ?? 0) + 1);
+      })
+    );
+    return [...tally.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([id]) => id);
+  }, [movies]);
+
+  const filtersActive = kind !== "all" || genre !== 0 || hindiOnly;
+
+  const matchesTab = (movie: Entry) =>
+    tab === "all" ||
+    (tab === "favourites" ? movie.is_favorite : movie.status === tab);
+
+  const visible = useMemo(() => {
+    const list = movies.filter((movie) => {
+      const inTab =
+        tab === "all" ||
+        (tab === "favourites" ? movie.is_favorite : movie.status === tab) ||
+        linger.has(movie.entry_id);
+      const kindOk = kind === "all" || movie.media_type === kind;
+      const languageOk = !hindiOnly || movie.original_language === "hi";
+      const genreOk = genre === 0 || movie.genre_ids.includes(genre);
+      return inTab && kindOk && languageOk && genreOk;
+    });
+
+    if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title));
+    if (sort === "rating") list.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+    if (sort === "year") {
+      list.sort((a, b) => (b.release_date ?? "").localeCompare(a.release_date ?? ""));
+    }
+
+    return list;
+  }, [movies, tab, kind, genre, hindiOnly, sort, linger]);
+
+  const stripItems = movies.filter((m) => m.poster_path).slice(0, 14);
+  const reel =
+    stripItems.length === 0
+      ? []
+      : Array.from({ length: Math.max(1, Math.ceil(10 / stripItems.length)) }, () => stripItems).flat();
+
+  const collage: (Entry | null)[] = [0, 1, 2].map((i) => movies[i] ?? null);
+
+  /* ---------- UI helpers ---------- */
+
   function showToast(text: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(text);
-    window.setTimeout(() => setToast(""), 3000);
+    toastTimer.current = setTimeout(() => setToast(""), 3000);
   }
 
   function releasePetals() {
+    if (reduced) return;
+
     const batch: Petal[] = Array.from({ length: 24 }, () => ({
       id: petalCounter.current++,
       left: Math.random() * 100,
@@ -265,6 +658,40 @@ export default function Home() {
     }, 8000);
   }
 
+  /**
+   * Plays a short stamp / clapperboard moment on a card. The card stays in the
+   * current tab for a beat so the moment is actually seen, then poofs away.
+   */
+  function flashCard(id: string, type: "watched" | "started") {
+    setFlash({ id, kind: type });
+    setLinger((previous) => new Set(previous).add(id));
+
+    window.setTimeout(() => setFlash(null), 1500);
+    window.setTimeout(() => setLeavingId(id), 1500);
+    window.setTimeout(() => {
+      setLinger((previous) => {
+        const next = new Set(previous);
+        next.delete(id);
+        return next;
+      });
+      setLeavingId("");
+    }, 1880);
+  }
+
+  function clearFilters() {
+    setKind("all");
+    setGenre(0);
+    setHindiOnly(false);
+  }
+
+  function clearSearch() {
+    setResults([]);
+    setQuery("");
+    setMessage("");
+  }
+
+  /* ---------- effects ---------- */
+
   /* sliding tab pill */
   useEffect(() => {
     const update = () => {
@@ -277,9 +704,16 @@ export default function Home() {
     document.fonts?.ready.then(update);
 
     return () => window.removeEventListener("resize", update);
-  }, [tab]);
+  }, [tab, countsKey]);
 
-  /* close the popup with Escape */
+  /* hero polaroids take turns on top */
+  useEffect(() => {
+    if (reduced || movies.length < 2) return;
+    const timer = window.setInterval(() => setShuffle((s) => s + 1), 4200);
+    return () => window.clearInterval(timer);
+  }, [reduced, movies.length]);
+
+  /* popup: Escape closes, body scroll locks, focus moves in */
   useEffect(() => {
     if (!selectedId) return;
 
@@ -287,9 +721,43 @@ export default function Home() {
       if (event.key === "Escape") setSelectedId("");
     };
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [selectedId]);
+
+  /* card menu: close on outside click or Escape */
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const close = () => {
+      setOpenMenuId("");
+      setConfirmRemoveId("");
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-card-menu]")) close();
+    };
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openMenuId]);
 
   async function loadMovies() {
     const {
@@ -323,6 +791,7 @@ export default function Home() {
         overview: row.overview ?? "",
         release_date: row.release_date ?? "",
         genre_ids: row.genre_ids ?? [],
+        original_language: row.original_language ?? "",
         status: row.status,
         rating: row.rating,
         review: row.review ?? "",
@@ -342,6 +811,8 @@ export default function Home() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  /* ---------- actions ---------- */
 
   async function searchMovies(e: React.FormEvent) {
     e.preventDefault();
@@ -379,6 +850,11 @@ export default function Home() {
       return;
     }
 
+    if (savedKeys.has(`${movie.media_type}-${movie.id}`)) {
+      showToast("Already in your diary ♡");
+      return;
+    }
+
     const { error } = await supabase.from("movie_entries").insert({
       user_id: userId,
       tmdb_id: movie.id,
@@ -388,6 +864,7 @@ export default function Home() {
       overview: movie.overview,
       release_date: movie.release_date,
       genre_ids: movie.genre_ids,
+      original_language: movie.original_language ?? null,
       status: "watchlist",
     });
 
@@ -403,20 +880,19 @@ export default function Home() {
 
     await loadMovies();
     showToast(`${movie.title} added to your diary ♡`);
-    setCelebrating(true);
-    window.setTimeout(() => setCelebrating(false), 3000);
+
+    if (!reduced) {
+      setCelebrating(true);
+      window.setTimeout(() => setCelebrating(false), 3000);
+    }
   }
 
-  async function updateStatus(movie: Entry) {
-    if (statusBusyId) return;
+  async function changeStatus(movie: Entry, next: Status) {
+    if (statusBusyId || movie.status === next) return;
 
     setStatusBusyId(movie.entry_id);
-    const next =
-      movie.status === "watchlist"
-        ? "currently_watching"
-        : movie.status === "currently_watching"
-          ? "watched"
-          : "watchlist";
+    setOpenMenuId("");
+    setConfirmRemoveId("");
 
     const { error } = await supabase
       .from("movie_entries")
@@ -430,8 +906,19 @@ export default function Home() {
     if (error) {
       setMessage(error.message);
     } else {
-      await loadMovies();
-      if (next === "watched") releasePetals();
+      setMovies((previous) =>
+        previous.map((item) =>
+          item.entry_id === movie.entry_id ? { ...item, status: next } : item
+        )
+      );
+
+      if (next === "watched") {
+        releasePetals();
+        flashCard(movie.entry_id, "watched");
+      } else if (next === "currently_watching") {
+        flashCard(movie.entry_id, "started");
+      }
+
       showToast(
         next === "watched"
           ? `${movie.title} — watched! ♡`
@@ -445,10 +932,15 @@ export default function Home() {
   }
 
   async function rateMovie(movie: Entry, rating: number) {
-    if (ratingBusyId) return;
+    const previousRating = movie.rating;
 
-    setRatingBusyId(movie.entry_id);
     setRatingPop(movie.entry_id);
+    setMovies((previous) =>
+      previous.map((item) =>
+        item.entry_id === movie.entry_id ? { ...item, rating } : item
+      )
+    );
+    window.setTimeout(() => setRatingPop(""), 450);
 
     const { error } = await supabase
       .from("movie_entries")
@@ -457,25 +949,35 @@ export default function Home() {
 
     if (error) {
       setMessage(error.message);
-    } else {
       setMovies((previous) =>
         previous.map((item) =>
-          item.entry_id === movie.entry_id ? { ...item, rating } : item
+          item.entry_id === movie.entry_id
+            ? { ...item, rating: previousRating }
+            : item
         )
       );
-      showToast(`${rating}/5 — ${ratingLabels[rating - 1]} ✨`);
+      return;
     }
 
-    window.setTimeout(() => setRatingPop(""), 450);
-    setRatingBusyId("");
+    showToast(`${rating}/5 — ${ratingLabels[rating - 1]} ✨`);
   }
 
   async function toggleFavorite(movie: Entry) {
-    if (favoriteBusyId) return;
-
-    setFavoriteBusyId(movie.entry_id);
     const next = !movie.is_favorite;
+
     setFavoritePop(movie.entry_id);
+    window.setTimeout(() => setFavoritePop(""), 450);
+
+    if (next) {
+      setBurstId(movie.entry_id);
+      window.setTimeout(() => setBurstId(""), 900);
+    }
+
+    setMovies((previous) =>
+      previous.map((item) =>
+        item.entry_id === movie.entry_id ? { ...item, is_favorite: next } : item
+      )
+    );
 
     const { error } = await supabase
       .from("movie_entries")
@@ -484,19 +986,17 @@ export default function Home() {
 
     if (error) {
       setMessage(error.message);
-    } else {
       setMovies((previous) =>
         previous.map((item) =>
           item.entry_id === movie.entry_id
-            ? { ...item, is_favorite: next }
+            ? { ...item, is_favorite: !next }
             : item
         )
       );
-      showToast(next ? `Added to your favourites ♡` : `Removed from favourites`);
+      return;
     }
 
-    window.setTimeout(() => setFavoritePop(""), 450);
-    setFavoriteBusyId("");
+    showToast(next ? "Added to your favourites ♡" : "Removed from favourites");
   }
 
   async function saveReview(movie: Entry) {
@@ -542,7 +1042,11 @@ export default function Home() {
   }
 
   async function deleteMovie(movie: Entry) {
-    if (!window.confirm(`Remove ${movie.title} from your diary?`)) return;
+    setOpenMenuId("");
+    setConfirmRemoveId("");
+    setRemovingId(movie.entry_id);
+
+    if (!reduced) await new Promise((resolve) => setTimeout(resolve, 380));
 
     const { error } = await supabase
       .from("movie_entries")
@@ -551,20 +1055,19 @@ export default function Home() {
 
     if (error) {
       setMessage(error.message);
-    } else {
-      if (selectedId === movie.entry_id) setSelectedId("");
-      await loadMovies();
-      showToast(`${movie.title} removed from your diary`);
+      setRemovingId("");
+      return;
     }
+
+    if (selectedId === movie.entry_id) setSelectedId("");
+    setMovies((previous) =>
+      previous.filter((item) => item.entry_id !== movie.entry_id)
+    );
+    setRemovingId("");
+    showToast(`${movie.title} removed from your diary`);
   }
 
-  const visible = movies.filter(
-    (movie) =>
-      tab === "all" ||
-      (tab === "favourites" ? movie.is_favorite : movie.status === tab)
-  );
-
-  const collage = movies.slice(0, 3);
+  /* ---------- render ---------- */
 
   return (
     <main className="relative min-h-screen overflow-x-clip bg-[#faf5ed] px-4 pb-8 pt-5 text-[#633747] sm:px-6 sm:pt-7 md:px-10">
@@ -575,6 +1078,9 @@ export default function Home() {
           font-family: "Fraunces", Georgia, serif;
           font-variation-settings: "SOFT" 100;
         }
+
+        .no-scrollbar { scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
 
         /* ---------- celebration + toast motion ---------- */
         @keyframes sparkle-pop {
@@ -613,11 +1119,134 @@ export default function Home() {
           z-index: 140;
           bottom: calc(20px + env(safe-area-inset-bottom));
           left: 50%;
+          transform: translateX(-50%);
           animation: toast-appear 3s ease-in-out forwards;
           pointer-events: none;
         }
         .heart-pop { animation: heart-pop .45s ease-out; }
         .star-pop { animation: star-pop .35s ease-out; }
+
+        /* ---------- heart burst when you favourite ---------- */
+        .burst {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 0;
+          height: 0;
+          pointer-events: none;
+        }
+        .burst-heart {
+          position: absolute;
+          left: -7px;
+          top: -9px;
+          font-size: 14px;
+          color: #c04d70;
+          opacity: 0;
+          animation: burst-fly .8s ease-out forwards;
+        }
+        @keyframes burst-fly {
+          0% { opacity: 0; transform: translate(0, 0) scale(.3); }
+          25% { opacity: 1; }
+          100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.15) rotate(18deg); }
+        }
+
+        /* ---------- stamp + clapperboard moments ---------- */
+        .flash-layer {
+          position: absolute;
+          inset: 0;
+          z-index: 15;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          background: rgba(53, 43, 39, 0.34);
+          pointer-events: none;
+          animation: flash-bg 1.5s ease forwards;
+        }
+        @keyframes flash-bg {
+          0% { opacity: 0; }
+          12%, 80% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        .stamp {
+          border: 3px solid #fffdfa;
+          border-radius: 0.7rem;
+          background: rgba(182, 108, 124, 0.88);
+          color: #fffdfa;
+          padding: 0.35rem 0.85rem;
+          font-size: 0.85rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          transform: rotate(-12deg);
+          animation: stamp-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+        }
+        @keyframes stamp-in {
+          0% { opacity: 0; transform: scale(2.4) rotate(-26deg); }
+          60% { opacity: 1; transform: scale(0.92) rotate(-12deg); }
+          100% { opacity: 1; transform: scale(1) rotate(-12deg); }
+        }
+        .action-pop {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          color: #fffdfa;
+          animation: action-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+        }
+        @keyframes action-in {
+          from { opacity: 0; transform: scale(0.5) translateY(14px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .clap-arm {
+          transform-origin: 8px 24px;
+          animation: clap 1s ease-in-out both;
+        }
+        @keyframes clap {
+          0%, 30% { transform: rotate(-32deg); }
+          48% { transform: rotate(0deg); }
+          100% { transform: rotate(0deg); }
+        }
+
+        /* ---------- cards leaving ---------- */
+        .poof { animation: poof 0.38s ease-in forwards; pointer-events: none; }
+        @keyframes poof {
+          to { opacity: 0; transform: scale(0.7) rotate(-4deg); filter: blur(6px); }
+        }
+        .wiggle { animation: wiggle 0.4s ease-in-out; }
+        @keyframes wiggle {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-3px); }
+          75% { transform: translateX(3px); }
+        }
+
+        /* ---------- live dot on "now playing" ---------- */
+        .live-dot {
+          display: inline-block;
+          width: 7px;
+          height: 7px;
+          margin-right: 5px;
+          border-radius: 9999px;
+          background: #c04d70;
+          animation: live-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes live-pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.6); opacity: 0.45; }
+        }
+
+        /* ---------- skeletons ---------- */
+        .skeleton {
+          aspect-ratio: 2 / 3;
+          border-radius: 1.5rem;
+          background: linear-gradient(100deg, #f1e4dc 30%, #fbf3ee 50%, #f1e4dc 70%);
+          background-size: 250% 100%;
+          animation: shimmer 1.4s linear infinite;
+        }
+        @keyframes shimmer {
+          from { background-position: 100% 0; }
+          to { background-position: -100% 0; }
+        }
 
         /* ---------- dreamy drifting background ---------- */
         .aurora {
@@ -659,19 +1288,22 @@ export default function Home() {
         }
         @keyframes fade-in { to { opacity: 1; } }
 
-        /* ---------- pinned polaroid collage ---------- */
-        .polaroid {
+        /* ---------- polaroid stack that shuffles ---------- */
+        .polaroid-slot {
           position: absolute;
+          left: 0;
+          top: 0;
           width: 138px;
+          transition: transform 0.9s cubic-bezier(0.3, 1.25, 0.4, 1);
+        }
+        .polaroid {
+          position: relative;
           padding: 8px 8px 26px;
           border-radius: 6px;
           background: #fffdfa;
           box-shadow: 0 16px 30px rgba(91, 58, 48, 0.2);
           animation: pin-float 6s ease-in-out infinite;
         }
-        .polaroid:nth-child(1) { left: 0;    top: 46px; --r: -9deg; animation-delay: -1s; }
-        .polaroid:nth-child(2) { left: 74px; top: 4px;  --r: 3deg;  animation-delay: -2.6s; z-index: 2; }
-        .polaroid:nth-child(3) { left: 142px; top: 56px; --r: 10deg; animation-delay: -4s; z-index: 1; }
         .polaroid::before {
           content: "";
           position: absolute;
@@ -682,10 +1314,45 @@ export default function Home() {
           transform: translateX(-50%) rotate(-3deg);
           background: rgba(242, 195, 184, 0.75);
           border-radius: 2px;
+          z-index: 1;
         }
         @keyframes pin-float {
-          0%, 100% { transform: translateY(0) rotate(var(--r)); }
-          50%      { transform: translateY(-10px) rotate(calc(var(--r) + 2deg)); }
+          0%, 100% { transform: translateY(0) rotate(-1deg); }
+          50%      { transform: translateY(-9px) rotate(1.5deg); }
+        }
+
+        /* ---------- film strip that scrolls your posters ---------- */
+        .filmstrip {
+          position: relative;
+          overflow: hidden;
+          border-radius: 0.9rem;
+          background: #7a4656;
+          padding: 16px 0;
+          box-shadow: 0 10px 24px rgba(91, 58, 48, 0.18);
+          -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+        }
+        .filmstrip::before,
+        .filmstrip::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          height: 6px;
+          background: repeating-linear-gradient(90deg, #faf5ed 0 9px, transparent 9px 20px);
+          opacity: 0.9;
+        }
+        .filmstrip::before { top: 5px; }
+        .filmstrip::after { bottom: 5px; }
+        .filmstrip-track {
+          display: flex;
+          width: max-content;
+          gap: 10px;
+          animation: reel linear infinite;
+        }
+        .filmstrip:hover .filmstrip-track { animation-play-state: paused; }
+        @keyframes reel {
+          to { transform: translateX(-50%); }
         }
 
         /* ---------- search glow ---------- */
@@ -746,12 +1413,33 @@ export default function Home() {
           transition: opacity 0.25s ease, transform 0.25s ease;
         }
         .pin-card:hover .pin-actions,
-        .pin-card:focus-within .pin-actions { opacity: 1; transform: translateY(0); }
+        .pin-card:focus-within .pin-actions,
+        .pin-actions.keep { opacity: 1; transform: translateY(0); }
         @media (hover: none) {
           .pin-actions { opacity: 1; transform: none; }
         }
 
-        /* now playing: soft pastel ring chases around the poster */
+        /* Every poster frame has the same outer 2:3 dimensions. */
+        .poster-frame {
+          position: relative;
+          display: block;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 2 / 3;
+          box-sizing: border-box;
+          overflow: hidden;
+          flex: none;
+        }
+
+        .poster-frame > .tilt {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+        }
+
+        /* now playing: soft pastel ring chases around the same fixed-size frame */
         @property --marquee-angle {
           syntax: "<angle>";
           initial-value: 0deg;
@@ -759,11 +1447,18 @@ export default function Home() {
         }
         @keyframes marquee-chase { to { --marquee-angle: 360deg; } }
         .now-playing {
+          box-sizing: border-box;
           padding: 3px;
           border-radius: 1.15rem;
           background: conic-gradient(from var(--marquee-angle), #f2c3b8, #d9c5ee, #cfe0bd, #f5dba3, #f2c3b8);
           animation: marquee-chase 5s linear infinite;
           box-shadow: 0 8px 26px rgba(198, 140, 160, 0.35);
+        }
+        /* the padding is the ring, so inset the poster by the same amount */
+        .poster-frame.now-playing > .tilt {
+          inset: 3px;
+          width: auto;
+          height: auto;
         }
 
         /* ---------- popup ---------- */
@@ -788,14 +1483,20 @@ export default function Home() {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .sparkle, .success-toast, .heart-pop, .star-pop, .aurora span,
-          .polaroid, .glow-border, .now-playing, .petal, .modal-pop { animation: none; }
+          .success-toast, .heart-pop, .star-pop, .aurora span, .polaroid,
+          .glow-border, .now-playing, .modal-pop, .live-dot, .skeleton,
+          .filmstrip-track, .burst-heart, .clap-arm, .stamp, .action-pop,
+          .flash-layer, .wiggle { animation: none; }
+          .sparkle, .petal, .burst { display: none; }
+          .poof { animation: none; opacity: 0; }
           .hero-word, .hero-fade, .reveal {
             animation: none;
             opacity: 1;
             transform: none;
           }
           .tilt { transform: none; }
+          .polaroid-slot, .tab-pill { transition: none; }
+          .flash-layer { opacity: 1; }
         }
       `}</style>
 
@@ -845,14 +1546,34 @@ export default function Home() {
       )}
 
       <div className="relative z-10">
-        <header className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+        <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <Brand />
-          <a
+
+          <nav
+            aria-label="Main navigation"
+            className="order-3 flex w-full items-center justify-center gap-1 rounded-full border border-[#eadbd2] bg-white/70 p-1 shadow-sm backdrop-blur-sm sm:order-none sm:ml-auto sm:w-auto"
+          >
+            <Link
+              href="/cinema"
+              aria-current="page"
+              className="rounded-full bg-[#713746] px-4 py-2 text-xs font-medium text-white shadow-sm sm:text-sm"
+            >
+              Films
+            </Link>
+            <Link
+              href="/library"
+              className="rounded-full px-4 py-2 text-xs font-medium text-[#65705c] transition hover:bg-[#edf0e8] sm:text-sm"
+            >
+              Books
+            </Link>
+          </nav>
+
+          <Link
             href="/login"
             className="min-h-11 shrink-0 rounded-full bg-[#713746] px-4 py-2 text-sm text-white transition hover:-translate-y-0.5 hover:bg-[#8b4a5d] hover:shadow-lg sm:px-5 sm:text-base"
           >
             {userId ? "Account ♡" : "Sign in ♡"}
-          </a>
+          </Link>
         </header>
 
         <section className="mx-auto max-w-6xl py-9 sm:py-12 md:py-14">
@@ -863,7 +1584,7 @@ export default function Home() {
                 className="hero-fade mb-4 text-sm text-[#a26f79]"
                 style={{ animationDelay: "0.1s" }}
               >
-                your personal film diary
+                Your personal film diary
               </p>
 
               <h1 className="font-display text-[clamp(2.7rem,9vw,3.5rem)] leading-[1.05] sm:text-6xl md:text-7xl">
@@ -886,33 +1607,37 @@ export default function Home() {
               </h1>
             </div>
 
-            {/* pinned polaroids */}
+            {/* pinned polaroids: they take turns on top */}
             <div
               className="relative hidden h-64 w-72 shrink-0 sm:block"
               aria-hidden="true"
             >
-              {(collage.length > 0
-                ? collage
-                : ([null, null, null] as (Entry | null)[])
-              ).map((movie, index) => (
-                <div key={movie?.entry_id ?? index} className="polaroid">
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-sm bg-gradient-to-br from-[#f4e3d9] via-[#ead7df] to-[#e5e8d9]">
-                    {movie?.poster_path ? (
-                      <Image
-                        fill
-                        unoptimized
-                        src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                        alt=""
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-[#9b766f]">
-                        <Film size={28} />
+              {collage.map((movie, index) => {
+                const slot = polaroidSlots[(index + shuffle) % 3];
+
+                return (
+                  <div
+                    key={movie?.entry_id ?? `placeholder-${index}`}
+                    className="polaroid-slot"
+                    style={{
+                      transform: `translate(${slot.x}px, ${slot.y}px) rotate(${slot.r}deg)`,
+                      zIndex: slot.z,
+                    }}
+                  >
+                    <div
+                      className="polaroid"
+                      style={{ animationDelay: `${-index * 1.7}s` }}
+                    >
+                      <div className="relative aspect-[2/3] overflow-hidden rounded-sm">
+                        <PosterImage path={movie?.poster_path ?? ""} alt="" />
                       </div>
-                    )}
+                      <p className="absolute inset-x-2 bottom-1.5 truncate text-center font-display text-[10px] italic text-[#9b766f]">
+                        {movie?.title ?? "your next favourite"}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -926,10 +1651,22 @@ export default function Home() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={placeholder || " "}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder={placeholder || "Search a film or series…"}
                 aria-label="Search movies or TV shows"
                 className="min-w-0 flex-1 bg-transparent px-1.5 text-base outline-none placeholder:text-[#b49a9c] sm:px-2"
               />
+              {query && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  aria-label="Clear search"
+                  className="shrink-0 rounded-full p-2 text-[#b49a9c] transition hover:bg-[#f4eee8] hover:text-[#713746]"
+                >
+                  <X size={16} />
+                </button>
+              )}
               <button
                 disabled={busy}
                 className="min-h-10 shrink-0 rounded-full bg-[#713746] px-4 py-2 text-sm text-white transition hover:bg-[#8b4a5d] active:scale-95 disabled:opacity-50 sm:px-6 sm:text-base"
@@ -945,76 +1682,163 @@ export default function Home() {
             </p>
           )}
 
+          {/* Skeletons while searching */}
+          {busy && (
+            <div
+              className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 md:grid-cols-4 lg:grid-cols-5"
+              aria-hidden="true"
+            >
+              {Array.from({ length: 5 }, (_, index) => (
+                <div key={index} className="skeleton" />
+              ))}
+            </div>
+          )}
+
           {/* Search results as a masonry board */}
           {results.length > 0 && (
             <section className="mt-10">
-              <h2 className="mb-5 font-display text-3xl">Found for you ♡</h2>
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h2 className="font-display text-3xl">Found for you ♡</h2>
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="rounded-full border border-[#e6d6d0] bg-white/70 px-4 py-1.5 text-xs text-[#876d70] transition hover:border-[#b66c7c] hover:text-[#713746]"
+                >
+                  Clear results
+                </button>
+              </div>
 
               <Masonry
                 items={results}
-                render={(movie, index) => (
-                  <div
-                    key={`${movie.media_type}-${movie.id}`}
-                    className="reveal"
-                    style={{ animationDelay: `${index * 70}ms` }}
-                  >
-                    <article className="pin-card">
-                      <div
-                        className={`tilt relative ${posterRatios[index % posterRatios.length]} overflow-hidden rounded-3xl bg-[#ead9d1] shadow-md`}
-                        onMouseMove={handleTilt}
-                        onMouseLeave={resetTilt}
-                      >
-                        {movie.poster_path ? (
-                          <Image
-                            fill
-                            unoptimized
-                            src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                            alt={`${movie.title} poster`}
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="p-4">Poster unavailable</div>
-                        )}
+                render={(movie, index) => {
+                  const isSaved = savedKeys.has(`${movie.media_type}-${movie.id}`);
 
+                  return (
+                    <div
+                      key={`${movie.media_type}-${movie.id}`}
+                      className="reveal w-full"
+                      style={{ animationDelay: `${Math.min(index, 12) * 70}ms` }}
+                    >
+                      <article className="pin-card">
+                        <div
+                          className="tilt poster-frame w-full rounded-3xl bg-[#ead9d1] shadow-md"
+                          onMouseMove={handleTilt}
+                          onMouseLeave={resetTilt}
+                        >
+                          <PosterImage path={movie.poster_path} alt={`${movie.title} poster`} />
+
+                          {movie.media_type === "tv" && (
+                            <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[10px] font-medium text-[#713746] shadow-sm">
+                              <Tv size={12} /> Series
+                            </span>
+                          )}
+
+                          <button
+                            onClick={() => addMovie(movie)}
+                            disabled={isSaved}
+                            className={`pin-actions absolute right-3 top-3 z-10 rounded-full px-4 py-2 text-xs font-medium text-white shadow-md transition active:scale-95 ${
+                              isSaved
+                                ? "keep bg-[#65705c]"
+                                : "bg-[#b66c7c] hover:bg-[#a65d6e]"
+                            }`}
+                          >
+                            {isSaved ? "✓ Saved" : "+ Save"}
+                          </button>
+                        </div>
+
+                        <h3 className="mt-3 break-words px-1 font-display text-base leading-snug sm:text-lg">
+                          {movie.title}
+                        </h3>
+                        <p className="px-1 text-xs text-[#987c7c]">
+                          {movie.release_date?.slice(0, 4)} ·{" "}
+                          {movie.media_type === "tv" ? "Series" : "Film"}
+                        </p>
+                        <p className="mt-1 line-clamp-3 px-1 text-xs leading-5 text-[#876d70]">
+                          {movie.overview}
+                        </p>
                         <button
                           onClick={() => addMovie(movie)}
-                          className="pin-actions absolute right-3 top-3 z-10 rounded-full bg-[#b66c7c] px-4 py-2 text-xs font-medium text-white shadow-md transition hover:bg-[#a65d6e] active:scale-95"
+                          disabled={isSaved}
+                          className={`mt-3 min-h-11 w-full rounded-full border px-2 py-2 text-xs transition active:scale-95 sm:text-sm ${
+                            isSaved
+                              ? "border-[#cdd6c4] bg-[#edf2e9] text-[#52634a]"
+                              : "border-[#d9b9b6] bg-white/60 hover:bg-[#f0dfd7]"
+                          }`}
                         >
-                          + Save
+                          {isSaved ? "✓ In your diary" : "+ Add to watchlist"}
                         </button>
-                      </div>
-
-                      <h3 className="mt-3 break-words px-1 font-display text-base leading-snug sm:text-lg">
-                        {movie.title}
-                      </h3>
-                      <p className="px-1 text-xs text-[#987c7c]">
-                        {movie.release_date?.slice(0, 4)} ·{" "}
-                        {movie.media_type === "tv" ? "Series" : "Film"}
-                      </p>
-                      <p className="mt-1 line-clamp-3 px-1 text-xs leading-5 text-[#876d70]">
-                        {movie.overview}
-                      </p>
-                      <button
-                        onClick={() => addMovie(movie)}
-                        className="mt-3 min-h-11 w-full rounded-full border border-[#d9b9b6] bg-white/60 px-2 py-2 text-xs transition hover:bg-[#f0dfd7] active:scale-95 sm:text-sm"
-                      >
-                        + Add to watchlist
-                      </button>
-                    </article>
-                  </div>
-                )}
+                      </article>
+                    </div>
+                  );
+                }}
               />
             </section>
           )}
 
+          {/* Film strip of your own posters */}
+          {reel.length > 0 && (
+            <div className="mt-14 sm:mt-16" aria-hidden="true">
+              <div className="filmstrip">
+                <div
+                  className="filmstrip-track"
+                  style={{ animationDuration: `${reel.length * 2 * 3}s` }}
+                >
+                  {[...reel, ...reel].map((movie, index) => (
+                    <div
+                      key={`${movie.entry_id}-${index}`}
+                      className="relative h-[72px] w-12 shrink-0 overflow-hidden rounded-[3px] bg-[#ead9d1]"
+                    >
+                      <PosterImage path={movie.poster_path} alt="" size={16} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Collection */}
-          <section className="mt-14 sm:mt-20">
+          <section className="mt-10 sm:mt-14">
             <h2 className="font-display text-3xl sm:text-4xl">
               Your little collection
             </h2>
 
+            {/* Stats */}
+            {userId && (
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard
+                  label="in your diary"
+                  value={counts.all}
+                  icon={<Film size={20} />}
+                  reduced={reduced}
+                  delay={0}
+                />
+                <StatCard
+                  label="watched"
+                  value={counts.watched}
+                  icon={<Check size={20} />}
+                  reduced={reduced}
+                  delay={80}
+                />
+                <StatCard
+                  label="favourites"
+                  value={counts.favourites}
+                  icon={<Heart size={20} />}
+                  reduced={reduced}
+                  delay={160}
+                />
+                <StatCard
+                  label="average petals"
+                  value={averageRating}
+                  decimals={1}
+                  icon={<Flower2 size={20} />}
+                  reduced={reduced}
+                  delay={240}
+                />
+              </div>
+            )}
+
             {/* Tabs with a sliding pill */}
-            <div className="no-scrollbar -mx-4 mb-8 mt-6 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+            <div className="no-scrollbar -mx-4 mb-5 mt-6 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
               <div
                 role="tablist"
                 className="relative flex w-max gap-1 rounded-full border border-[#e9dfd6] bg-white/60 p-1 backdrop-blur-sm"
@@ -1037,96 +1861,276 @@ export default function Home() {
                       tab === value ? "text-white" : "text-[#81746a] hover:text-[#51463e]"
                     }`}
                   >
-                    {label}
+                    <span>{label}</span>
+                    <span className={`ml-1 tabular-nums ${tab === value ? "text-white/80" : "text-[#ad9990]"}`}>
+                      {counts[value as keyof typeof counts]}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Filters + sort */}
+            {userId && movies.length > 0 && (
+              <div className="mb-8 flex flex-wrap items-center gap-2">
+                <div className="no-scrollbar -mx-4 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+                  <Chip active={kind === "all"} onClick={() => setKind("all")}>
+                    All
+                  </Chip>
+                  <Chip active={kind === "movie"} onClick={() => setKind("movie")}>
+                    Films
+                  </Chip>
+                  <Chip active={kind === "tv"} onClick={() => setKind("tv")}>
+                    Series
+                  </Chip>
+
+                  <span className="mx-1 h-5 w-px shrink-0 bg-[#e6d6d0]" aria-hidden="true" />
+
+                  <Chip active={hindiOnly} onClick={() => setHindiOnly((v) => !v)}>
+                    Hindi
+                  </Chip>
+
+                  {genreChips.length > 0 && (
+                    <span className="mx-1 h-5 w-px shrink-0 bg-[#e6d6d0]" aria-hidden="true" />
+                  )}
+
+                  {genreChips.map((id) => (
+                    <Chip
+                      key={id}
+                      active={genre === id}
+                      onClick={() => setGenre(genre === id ? 0 : id)}
+                    >
+                      {genreNames[id]}
+                    </Chip>
+                  ))}
+                </div>
+
+                <label className="flex shrink-0 items-center gap-2 text-xs text-[#987c7c]">
+                  <span className="sr-only sm:not-sr-only">Sort</span>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as Sort)}
+                    className="min-h-9 rounded-full border border-[#e6d6d0] bg-white/70 px-3 py-1.5 text-xs text-[#876d70] outline-none focus:border-[#b66c7c]"
+                  >
+                    {(Object.keys(sortLabels) as Sort[]).map((value) => (
+                      <option key={value} value={value}>
+                        {sortLabels[value]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
 
             {!userId ? (
               <div className="rounded-3xl border border-dashed border-[#d9b9b6] bg-white/60 p-7 text-center backdrop-blur-sm sm:p-12">
                 <Heart className="mx-auto mb-4 animate-bounce text-[#b66c7c]" size={30} />
                 <h3 className="font-display text-2xl">Your stories belong here.</h3>
                 <p className="mt-2 text-sm">Sign in to save your personal collection.</p>
+                <Link
+                  href="/login"
+                  className="mt-5 inline-flex min-h-11 items-center rounded-full bg-[#713746] px-6 py-2 text-sm text-white transition hover:-translate-y-0.5 hover:bg-[#8b4a5d]"
+                >
+                  Sign in ♡
+                </Link>
               </div>
             ) : visible.length === 0 ? (
               <div
-                key={tab}
+                key={`${tab}-${filtersActive}`}
                 className="reveal rounded-3xl border border-dashed border-[#d9b9b6] bg-white/60 p-7 text-center backdrop-blur-sm sm:p-12"
               >
-                <p className="animate-bounce text-4xl">🎬 🌷</p>
-                <h3 className="mt-4 font-display text-2xl">A blank page, for now.</h3>
-                <p className="mt-2 text-sm">
-                  Search for a title above and add it to your diary.
-                </p>
+                {filtersActive && counts[tab as keyof typeof counts] > 0 ? (
+                  <>
+                    <p className="animate-bounce text-4xl">🔍 🌸</p>
+                    <h3 className="mt-4 font-display text-2xl">Nothing matches those filters.</h3>
+                    <p className="mt-2 text-sm">Try fewer filters to see more of this shelf.</p>
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="mt-5 min-h-11 rounded-full border border-[#d9b9b6] bg-white px-6 py-2 text-sm transition hover:bg-[#f0dfd7] active:scale-95"
+                    >
+                      Clear filters
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="animate-bounce text-4xl">{emptyCopy[tab].emoji}</p>
+                    <h3 className="mt-4 font-display text-2xl">{emptyCopy[tab].title}</h3>
+                    <p className="mt-2 text-sm">{emptyCopy[tab].text}</p>
+                  </>
+                )}
               </div>
             ) : (
               <Masonry
-                key={tab}
+                key={`${tab}-${kind}-${genre}-${hindiOnly}-${sort}`}
                 items={visible}
                 render={(movie, index) => {
                   const isSavingStatus = statusBusyId === movie.entry_id;
                   const playing = movie.status === "currently_watching";
+                  const menuOpen = openMenuId === movie.entry_id;
+                  const leaving =
+                    removingId === movie.entry_id ||
+                    (leavingId === movie.entry_id && !matchesTab(movie));
+                  const flashing = flash?.id === movie.entry_id ? flash : null;
 
                   return (
                     <div
                       key={movie.entry_id}
-                      className="reveal"
-                      style={{ animationDelay: `${index * 70}ms` }}
+                      className="reveal w-full"
+                      style={{ animationDelay: `${Math.min(index, 12) * 70}ms` }}
                     >
-                      <article className="pin-card relative min-w-0">
-                        <div className={playing ? "now-playing" : ""}>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`Open ${movie.title}`}
-                            onClick={() => setSelectedId(movie.entry_id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                setSelectedId(movie.entry_id);
-                              }
-                            }}
-                            className={`tilt relative cursor-pointer ${posterRatios[index % posterRatios.length]} overflow-hidden ${
-                              playing ? "rounded-[1.05rem]" : "rounded-3xl"
-                            } bg-[#ead9d1] shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b66c7c] focus-visible:ring-offset-4`}
-                            onMouseMove={handleTilt}
-                            onMouseLeave={resetTilt}
-                          >
-                            {movie.poster_path ? (
-                              <Image
-                                fill
-                                unoptimized
-                                src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                                alt={movie.title}
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="p-4">Poster unavailable</div>
-                            )}
-
-                            {playing && (
-                              <span className="absolute left-3 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] text-[#87505e] shadow-sm">
-                                Now playing
-                              </span>
-                            )}
-
-                            <button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleFavorite(movie);
+                      <article
+                        className={`pin-card relative w-full min-w-0 ${leaving ? "poof" : ""}`}
+                      >
+                        <div className="relative">
+                          <div className={`poster-frame ${playing ? "now-playing" : ""}`}>
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Open ${movie.title}`}
+                              onClick={() => setSelectedId(movie.entry_id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedId(movie.entry_id);
+                                }
                               }}
-                              disabled={Boolean(favoriteBusyId)}
+                              className={`tilt relative h-full w-full cursor-pointer overflow-hidden ${
+                                playing ? "rounded-[0.9rem]" : "rounded-3xl"
+                              } bg-[#ead9d1] shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b66c7c] focus-visible:ring-offset-4`}
+                              onMouseMove={handleTilt}
+                              onMouseLeave={resetTilt}
+                            >
+                              <PosterImage path={movie.poster_path} alt={movie.title} />
+
+                              {movie.media_type === "tv" && (
+                                <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1.5 text-[10px] font-medium text-[#713746] shadow-sm">
+                                  <Tv size={12} /> Series
+                                </span>
+                              )}
+
+                              {playing && (
+                                <span
+                                  className={`absolute ${movie.media_type === "tv" ? "left-3 top-10" : "left-3 top-3"} z-10 inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[11px] text-[#87505e] shadow-sm`}
+                                >
+                                  <span className="live-dot" />
+                                  Now playing
+                                </span>
+                              )}
+
+                              {movie.status === "watched" && movie.rating && (
+                                <span className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] text-[#87505e] shadow-sm">
+                                  <Flower2 size={12} fill="currentColor" />
+                                  {movie.rating}
+                                </span>
+                              )}
+
+                              {flashing && (
+                                <div className="flash-layer" aria-hidden="true">
+                                  {flashing.kind === "watched" ? (
+                                    <span className="stamp">WATCHED ♡</span>
+                                  ) : (
+                                    <div className="action-pop">
+                                      <Clapper />
+                                      <span className="font-display text-lg italic">Action!</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* favourite heart (outside the poster so the burst isn't clipped) */}
+                          <div
+                            className={`pin-actions absolute right-3 top-3 z-20 ${
+                              movie.is_favorite ? "keep" : ""
+                            }`}
+                          >
+                            <button
+                              onClick={() => toggleFavorite(movie)}
                               title={movie.is_favorite ? "Remove from favourites" : "Add to favourites"}
                               aria-label={movie.is_favorite ? "Remove from favourites" : "Add to favourites"}
-                              className={`pin-actions absolute right-3 top-3 z-10 rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110 active:scale-90 disabled:opacity-50 ${
+                              aria-pressed={movie.is_favorite}
+                              className={`relative rounded-full p-2 shadow-md transition-all duration-200 hover:scale-110 active:scale-90 ${
                                 movie.is_favorite
                                   ? "bg-[#fbe8ed] text-[#c04d70]"
                                   : "bg-white/95 text-[#bda1a4] hover:text-[#c04d70]"
                               } ${favoritePop === movie.entry_id ? "heart-pop" : ""}`}
                             >
                               <Heart size={19} fill={movie.is_favorite ? "currentColor" : "none"} />
+                              {burstId === movie.entry_id && <HeartBurst />}
                             </button>
+                          </div>
+
+                          {/* card menu */}
+                          <div
+                            data-card-menu
+                            className="pin-actions absolute bottom-3 left-3 z-30"
+                            style={menuOpen ? { opacity: 1, transform: "none" } : undefined}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setConfirmRemoveId("");
+                                setOpenMenuId(menuOpen ? "" : movie.entry_id);
+                              }}
+                              aria-label={`More options for ${movie.title}`}
+                              aria-haspopup="menu"
+                              aria-expanded={menuOpen}
+                              className="rounded-full bg-white/95 p-2 text-[#876d70] shadow-md transition hover:bg-white hover:text-[#713746] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b66c7c]"
+                            >
+                              <MoreHorizontal size={18} />
+                            </button>
+
+                            {menuOpen && (
+                              <div
+                                role="menu"
+                                className="modal-pop absolute bottom-11 left-0 w-48 overflow-hidden rounded-2xl border border-[#eadfd5] bg-[#fffdfa] p-1.5 shadow-xl"
+                              >
+                                {statusOrder
+                                  .filter((status) => status !== movie.status)
+                                  .map((status) => (
+                                    <button
+                                      key={status}
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => changeStatus(movie, status)}
+                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs text-[#713746] transition hover:bg-[#f8ecec]"
+                                    >
+                                      {status === "watched" ? (
+                                        <Check size={14} />
+                                      ) : status === "currently_watching" ? (
+                                        <Play size={14} />
+                                      ) : (
+                                        <Film size={14} />
+                                      )}
+                                      {moveLabels[status]}
+                                    </button>
+                                  ))}
+
+                                <div className="my-1 border-t border-[#f0e6dd]" />
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() =>
+                                    confirmRemoveId === movie.entry_id
+                                      ? void deleteMovie(movie)
+                                      : setConfirmRemoveId(movie.entry_id)
+                                  }
+                                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs transition ${
+                                    confirmRemoveId === movie.entry_id
+                                      ? "wiggle bg-[#f8dfe3] text-[#9b3d54]"
+                                      : "text-[#9b5363] hover:bg-[#f8ecec]"
+                                  }`}
+                                >
+                                  <Trash2 size={14} />
+                                  {confirmRemoveId === movie.entry_id
+                                    ? "Tap again to remove"
+                                    : "Remove from diary"}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -1143,45 +2147,39 @@ export default function Home() {
                           </p>
                         </button>
 
-                        <button
-                          onClick={() => updateStatus(movie)}
-                          disabled={Boolean(statusBusyId)}
-                          className={`mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border px-2 py-2 text-xs font-medium transition-all duration-200 disabled:opacity-60 sm:gap-2 sm:px-3 sm:text-sm ${
-                            movie.status === "watched"
-                              ? "border-[#65705c] bg-[#edf2e9] text-[#52634a]"
-                              : playing
-                                ? "border-[#b66c7c] bg-[#f8e8ec] text-[#713746]"
-                                : "border-[#713746] bg-[#713746] text-white hover:-translate-y-0.5 hover:bg-[#8b4a5d] active:scale-95"
-                          }`}
-                        >
-                          {isSavingStatus ? (
-                            <><LoaderCircle size={16} className="animate-spin" /> Saving...</>
-                          ) : movie.status === "watched" ? (
-                            <><Check size={16} /> Watched it ♡</>
-                          ) : playing ? (
-<><Check size={16} /> Mark as watched</>                          ) : (
-                            <><Heart size={16} /> Start watching</>
-                          )}
-                        </button>
-
-                        {movie.status === "watched" && (
+                        {movie.status === "watched" ? (
                           <button
                             onClick={() => setSelectedId(movie.entry_id)}
-                            className="mt-2 flex items-center gap-1.5 px-1 text-xs text-[#a26f79] transition hover:text-[#713746]"
+                            className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#65705c] bg-[#edf2e9] px-2 py-2 text-xs font-medium text-[#52634a] transition-all duration-200 hover:-translate-y-0.5 active:scale-95 sm:gap-2 sm:px-3 sm:text-sm"
                           >
-                            <Sparkles size={13} />
-                            {movie.rating
-                              ? `${movie.rating}/5 petals · rate & review`
-                              : "Rate & review"}
+                            <Check size={16} />
+                            {movie.rating ? "Watched ♡" : "Rate & review"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => changeStatus(movie, nextStatus(movie.status))}
+                            disabled={Boolean(statusBusyId)}
+                            className={`mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border px-2 py-2 text-xs font-medium transition-all duration-200 disabled:opacity-60 sm:gap-2 sm:px-3 sm:text-sm ${
+                              playing
+                                ? "border-[#b66c7c] bg-[#f8e8ec] text-[#713746] hover:-translate-y-0.5 active:scale-95"
+                                : "border-[#713746] bg-[#713746] text-white hover:-translate-y-0.5 hover:bg-[#8b4a5d] active:scale-95"
+                            }`}
+                          >
+                            {isSavingStatus ? (
+                              <>
+                                <LoaderCircle size={16} className="animate-spin" /> Saving...
+                              </>
+                            ) : playing ? (
+                              <>
+                                <Check size={16} /> Mark as watched
+                              </>
+                            ) : (
+                              <>
+                                <Play size={16} fill="currentColor" /> Start watching
+                              </>
+                            )}
                           </button>
                         )}
-
-                        <button
-                          onClick={() => deleteMovie(movie)}
-                          className="mt-2 flex items-center gap-1 px-1 text-xs text-[#987c7c] transition hover:text-[#713746]"
-                        >
-                          <Trash2 size={13} /> Remove
-                        </button>
                       </article>
                     </div>
                   );
@@ -1211,9 +2209,10 @@ export default function Home() {
             className="modal-pop relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-[#eee4da] bg-[#fffdfa] p-6 shadow-2xl sm:p-8"
           >
             <button
+              ref={closeRef}
               onClick={() => setSelectedId("")}
               aria-label="Close details"
-              className="absolute right-5 top-5 z-10 rounded-full bg-[#f4eee8] p-2 text-[#8d776b] transition hover:rotate-90 hover:bg-[#eadfd5]"
+              className="absolute right-5 top-5 z-10 rounded-full bg-[#f4eee8] p-2 text-[#8d776b] transition hover:rotate-90 hover:bg-[#eadfd5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#b66c7c]"
             >
               <X size={18} />
             </button>
@@ -1224,19 +2223,7 @@ export default function Home() {
                 onMouseMove={handleTilt}
                 onMouseLeave={resetTilt}
               >
-                {selected.poster_path ? (
-                  <Image
-                    fill
-                    unoptimized
-                    src={`https://image.tmdb.org/t/p/w500${selected.poster_path}`}
-                    alt={selected.title}
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[#9b766f]">
-                    <Film size={30} />
-                  </div>
-                )}
+                <PosterImage path={selected.poster_path} alt={selected.title} size={30} />
               </div>
 
               <div className="min-w-0 self-center">
@@ -1268,35 +2255,44 @@ export default function Home() {
                 <section>
                   <p className="mb-3 text-sm text-[#a26f79]">Your rating</p>
 
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((petal) => (
-                      <button
-                        key={petal}
-                        onClick={() => rateMovie(selected, petal)}
-                        disabled={Boolean(ratingBusyId)}
-                        aria-label={`Rate ${petal} out of 5 petals`}
-                        title={`${petal} out of 5 petals`}
-                        className={`rounded-full p-1.5 transition duration-200 hover:-rotate-12 hover:scale-125 active:scale-90 disabled:opacity-50 ${
-                          ratingPop === selected.entry_id ? "star-pop" : ""
-                        } ${petal <= (selected.rating ?? 0) ? "text-[#c77d91]" : "text-[#ddc9bc]"}`}
-                      >
-                        <Flower2
-                          size={28}
-                          strokeWidth={1.8}
-                          fill={petal <= (selected.rating ?? 0) ? "currentColor" : "none"}
-                        />
-                      </button>
-                    ))}
+                  <div
+                    className="flex items-center gap-1"
+                    onMouseLeave={() => setHoverRating(0)}
+                  >
+                    {[1, 2, 3, 4, 5].map((petal) => {
+                      const lit = petal <= (hoverRating || selected.rating || 0);
 
-                    {ratingBusyId === selected.entry_id && (
-                      <LoaderCircle size={16} className="ml-1 animate-spin" />
-                    )}
+                      return (
+                        <button
+                          key={petal}
+                          onClick={() => rateMovie(selected, petal)}
+                          onMouseEnter={() => setHoverRating(petal)}
+                          onFocus={() => setHoverRating(petal)}
+                          onBlur={() => setHoverRating(0)}
+                          aria-label={`Rate ${petal} out of 5 petals`}
+                          title={`${petal} out of 5 petals`}
+                          className={`rounded-full p-1.5 transition duration-200 hover:-rotate-12 hover:scale-125 active:scale-90 ${
+                            ratingPop === selected.entry_id && petal <= (selected.rating ?? 0)
+                              ? "star-pop"
+                              : ""
+                          } ${lit ? "text-[#c77d91]" : "text-[#ddc9bc]"}`}
+                        >
+                          <Flower2
+                            size={28}
+                            strokeWidth={1.8}
+                            fill={lit ? "currentColor" : "none"}
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <p className="mt-2 min-h-5 text-xs text-[#89515f]">
-                    {selected.rating
-                      ? `${selected.rating}/5 petals — ${ratingLabels[selected.rating - 1]}`
-                      : "Unfold a petal for each point"}
+                    {hoverRating
+                      ? ratingLabels[hoverRating - 1]
+                      : selected.rating
+                        ? `${selected.rating}/5 petals — ${ratingLabels[selected.rating - 1]}`
+                        : "Unfold a petal for each point"}
                   </p>
                 </section>
 
@@ -1346,13 +2342,21 @@ export default function Home() {
                         }`}
                       >
                         {isSavingReview ? (
-                          <><LoaderCircle size={15} className="animate-spin" /> Saving your thoughts...</>
+                          <>
+                            <LoaderCircle size={15} className="animate-spin" /> Saving your thoughts...
+                          </>
                         ) : savedReviews.includes(selected.entry_id) ? (
-                          <><Check size={15} /> Saved with love ♡</>
+                          <>
+                            <Check size={15} /> Saved with love ♡
+                          </>
                         ) : reviewChanged ? (
-                          <><Save size={15} /> Save my review</>
+                          <>
+                            <Save size={15} /> Save my review
+                          </>
                         ) : (
-                          <><Check size={15} /> Review saved</>
+                          <>
+                            <Check size={15} /> Review saved
+                          </>
                         )}
                       </button>
                     );
@@ -1360,9 +2364,26 @@ export default function Home() {
                 </section>
               </>
             ) : (
-              <p className="py-2 text-center text-sm leading-6 text-[#987c7c]">
-                Mark it as watched to rate it and write your little review ♡
-              </p>
+              <div className="py-2 text-center">
+                <p className="text-sm leading-6 text-[#987c7c]">
+                  Mark it as watched to rate it and write your little review ♡
+                </p>
+                <button
+                  onClick={() => changeStatus(selected, "watched")}
+                  disabled={Boolean(statusBusyId)}
+                  className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#713746] px-6 py-2 text-sm text-white transition hover:-translate-y-0.5 hover:bg-[#8b4a5d] active:scale-95 disabled:opacity-60"
+                >
+                  {statusBusyId === selected.entry_id ? (
+                    <>
+                      <LoaderCircle size={16} className="animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} /> Mark as watched
+                    </>
+                  )}
+                </button>
+              </div>
             )}
 
             <p className="mt-8 text-center font-display text-sm italic text-[#b18e80]">
