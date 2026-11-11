@@ -374,12 +374,16 @@ function GoalCard({
   goal,
   pages,
   reduced,
+  year,
+  month,
   onChange,
 }: {
   done: number;
   goal: number;
   pages: number;
   reduced: boolean;
+  year: number | null;
+  month: number | null;
   onChange: (next: number) => void;
 }) {
   const shown = useCountUp(done, reduced);
@@ -388,7 +392,7 @@ function GoalCard({
   const progress = Math.min(done / goal, 1);
   const reached = done >= goal;
   const remaining = Math.max(goal - done, 0);
-  const monthsLeft = 12 - new Date().getMonth();
+  const monthsLeft = month === null ? 12 : 12 - month;
   const perMonth = Math.ceil(remaining / monthsLeft);
 
   return (
@@ -425,7 +429,7 @@ function GoalCard({
 
       <div className="min-w-0 flex-1 basis-48">
         <p className="font-display text-xl text-[#51463e]">
-          {new Date().getFullYear()} reading goal
+          {year === null ? "Your reading goal" : `${year} reading goal`}
         </p>
         <p className="mt-1 text-sm text-[#8c7a6f]">
           {reached
@@ -512,6 +516,8 @@ export default function LibraryPage() {
   const [savedNotes, setSavedNotes] = useState<string[]>([]);
 
   const [goal, setGoal] = useState(12);
+  const [calendarYear, setCalendarYear] = useState<number | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState<number | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [shuffle, setShuffle] = useState(0);
 
@@ -661,6 +667,13 @@ export default function LibraryPage() {
     return () => subscription.unsubscribe();
   }, [loadCollection, supabase]);
 
+  /* Read the current calendar date after hydration so prerendering stays deterministic. */
+  useEffect(() => {
+    const now = new Date();
+    setCalendarYear(now.getFullYear());
+    setCalendarMonth(now.getMonth());
+  }, []);
+
   /* remember the yearly goal */
   useEffect(() => {
     try {
@@ -689,13 +702,15 @@ export default function LibraryPage() {
     [collection]
   );
 
-  const year = new Date().getFullYear();
+  const year = calendarYear;
 
   const readThisYear = useMemo(
     () =>
-      collection.filter(
-        (b) => b.shelf === "Read" && b.finishedOn?.startsWith(String(year))
-      ),
+      year === null
+        ? []
+        : collection.filter(
+            (b) => b.shelf === "Read" && b.finishedOn?.startsWith(String(year))
+          ),
     [collection, year]
   );
 
@@ -1722,6 +1737,8 @@ export default function LibraryPage() {
               goal={goal}
               pages={pagesThisYear}
               reduced={reduced}
+              year={calendarYear}
+              month={calendarMonth}
               onChange={changeGoal}
             />
           </section>
